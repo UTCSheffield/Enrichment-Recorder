@@ -20,7 +20,7 @@ Below are example screenshots of the application in action:
 ### Create Activity Page
 ![Create activity page](assets/screenshots/create-activity-page.png)
 
-### Create Activity Page
+### Settings page
 ![Settings page](assets/screenshots/settings-page.png)
 
 ## Run with Docker
