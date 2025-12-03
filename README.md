@@ -2,6 +2,8 @@
 # Enrichment Recorder
 A single-page PHP application to record student attendance for enrichment activities.
 
+Uses PHP and MYSQL runs through a docker container.
+
 ## Screenshots
 
 Below are example screenshots of the application in action:

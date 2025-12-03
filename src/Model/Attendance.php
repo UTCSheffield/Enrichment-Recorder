@@ -17,19 +17,9 @@ class Attendance {
     }
 
     public static function toggle(PDO $db, int $studentId, int $activityId, string $weekStart, int $sessionIndex, int $present): void {
-        $driver = $db->getAttribute(PDO::ATTR_DRIVER_NAME);
-        
-        if ($driver === 'mysql') {
-            $sql = "INSERT INTO attendance (student_id, activity_id, week_start, session_index, present)
-                VALUES (:student, :activity, :week_start, :session_index, :present)
-                ON DUPLICATE KEY UPDATE present = :present2";
-        } else {
-            // SQLite
-            $sql = "INSERT INTO attendance (student_id, activity_id, week_start, session_index, present)
-                VALUES (:student, :activity, :week_start, :session_index, :present)
-                ON CONFLICT(student_id, activity_id, week_start, session_index)
-                DO UPDATE SET present = :present2";
-        }
+        $sql = "INSERT INTO attendance (student_id, activity_id, week_start, session_index, present)
+            VALUES (:student, :activity, :week_start, :session_index, :present)
+            ON DUPLICATE KEY UPDATE present = :present2";
 
         $stmt = $db->prepare($sql);
         $stmt->execute([

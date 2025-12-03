@@ -6,8 +6,6 @@ use PDO;
 use Exception;
 
 // Database handler class
-// This has code for both MySQL (Docker) and SQLite (local dev).
-// Even though SQLite may not be fully functional and was used only in early testing.
 class Database {
     private static $pdo;
 
@@ -32,24 +30,7 @@ class Database {
                     throw new Exception('DB Connection failed: ' . $e->getMessage());
                 }
             } else {
-                // Fallback to SQLite for local dev without docker env vars
-                $dir = __DIR__ . '/../../data';
-                if (!is_dir($dir)) {
-                    mkdir($dir, 0750, true);
-                }
-                $dbFile = $dir . '/enrichment.sqlite';
-                $needCreate = !file_exists($dbFile);
-                
-                try {
-                    self::$pdo = new PDO('sqlite:' . $dbFile);
-                    self::$pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-                    
-                    if ($needCreate) {
-                        self::initSchemaSQLite(self::$pdo);
-                    }
-                } catch (Exception $e) {
-                    throw new Exception('DB Connection failed: ' . $e->getMessage());
-                }
+                throw new Exception('Database configuration missing. Please check environment variables.');
             }
         }
         return self::$pdo;
@@ -96,50 +77,5 @@ class Database {
             student_id INT NOT NULL,
             PRIMARY KEY (activity_id, student_id)
         ) ENGINE=InnoDB;");
-    }
-
-    private static function initSchemaSQLite(PDO $db) {
-        $db->exec("PRAGMA journal_mode = WAL;");
-        
-        $db->exec("CREATE TABLE IF NOT EXISTS students (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            created_at TEXT NOT NULL DEFAULT (datetime('now'))
-        );");
-
-        $db->exec("CREATE TABLE IF NOT EXISTS activities (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            description TEXT,
-            sessions_per_week INTEGER NOT NULL DEFAULT 1,
-            created_at TEXT NOT NULL DEFAULT (datetime('now'))
-        );");
-
-        $db->exec("CREATE TABLE IF NOT EXISTS activity_students (
-            activity_id INTEGER NOT NULL,
-            student_id INTEGER NOT NULL,
-            PRIMARY KEY (activity_id, student_id)
-        );");
-
-        
-        // Attempt to add description column if it doesn't exist
-        try {
-            $db->exec("ALTER TABLE activities ADD COLUMN description TEXT");
-        } catch (Exception $e) { /* Ignore if exists */ }
-
-        $db->exec("CREATE TABLE attendance (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            student_id INTEGER NOT NULL,
-            activity_id INTEGER NOT NULL,
-            week_start TEXT NOT NULL,
-            session_index INTEGER NOT NULL,
-            present INTEGER NOT NULL DEFAULT 0,
-            UNIQUE(student_id, activity_id, week_start, session_index)
-        );");
-
-        $db->exec("CREATE TABLE settings (
-            k TEXT PRIMARY KEY,
-            v TEXT
-        );");
     }
 }
