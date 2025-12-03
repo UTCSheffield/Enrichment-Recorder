@@ -19,6 +19,7 @@
     let selectedActivity = null;
     let selectedWeekStart = null;
     let focusedRow = 0;
+    let selectedStudentIds = new Set();
 
     // UI elements
     const activitiesList = q('#activitiesList');
@@ -26,8 +27,11 @@
     const weekStartInput = q('#weekStart');
     const registerArea = q('#registerArea');
     const statsArea = q('#statsArea');
+    const settingsArea = q('#settingsArea');
     const navStats = q('#navStats');
+    const navSettings = q('#navSettings');
     const activityTitle = q('#activityTitle');
+    const activityDescription = q('#activityDescription');
     const editActivityBtn = q('#editActivityBtn');
     const toggleThemeBtn = q('#toggleTheme');
 
@@ -41,6 +45,16 @@
     let chartWeekly = null;
     let chartActivities = null;
     let statsData = null;
+
+    // Settings Elements
+    const settingsStudentsTable = q('#settingsStudentsTable tbody');
+    const selectAllStudents = q('#selectAllStudents');
+    const massDeleteBtn = q('#massDeleteBtn');
+    const massAddToActivityBtn = q('#massAddToActivityBtn');
+    const addToActivityModal = q('#addToActivityModal');
+    const addToActivityForm = q('#addToActivityForm');
+    const targetActivitySelect = q('#targetActivitySelect');
+    const selectedCountText = q('#selectedCountText');
 
     // Modal elements
     const addStudentBtn = q('#addStudentBtn');
@@ -83,6 +97,11 @@
         if (!selectedWeekStart) selectedWeekStart = isoMonday();
         weekStartInput.value = selectedWeekStart;
 
+        // If settings is active, re-render settings
+        if (settingsArea.style.display !== 'none') {
+            renderSettings();
+        }
+
         // If we are in stats mode, don't auto-select activity
         if (registerArea.style.display !== 'none' && state.activities.length && !selectedActivity) {
             selectActivity(state.activities[0].id);
@@ -105,11 +124,14 @@
         selectedActivity = id;
         registerArea.style.display = 'block';
         statsArea.style.display = 'none';
+        settingsArea.style.display = 'none';
         navStats.classList.remove('active');
+        navSettings.classList.remove('active');
 
         renderActivities();
         const act = state.activities.find(x => x.id == id);
         activityTitle.textContent = act ? act.name : 'Register';
+        activityDescription.textContent = act ? (act.description || '') : '';
         if (act) {
             editActivityBtn.style.display = 'flex';
         } else {
@@ -122,9 +144,12 @@
         selectedActivity = null;
         renderActivities(); // Clear active state
         navStats.classList.add('active');
+        navSettings.classList.remove('active');
         registerArea.style.display = 'none';
         statsArea.style.display = 'block';
+        settingsArea.style.display = 'none';
         activityTitle.textContent = 'Statistics';
+        activityDescription.textContent = '';
         editActivityBtn.style.display = 'none';
 
         const res = await api('get_stats');
@@ -235,6 +260,162 @@
             statsTable.appendChild(tr);
         });
     }
+
+    function loadSettings() {
+        selectedActivity = null;
+        renderActivities();
+        navStats.classList.remove('active');
+        navSettings.classList.add('active');
+        registerArea.style.display = 'none';
+        statsArea.style.display = 'none';
+        settingsArea.style.display = 'block';
+        activityTitle.textContent = 'Settings';
+        activityDescription.textContent = '';
+        editActivityBtn.style.display = 'none';
+        
+        selectedStudentIds.clear();
+        renderSettings();
+    }
+
+    function renderSettings() {
+        settingsStudentsTable.innerHTML = '';
+        const allSelected = state.students.length > 0 && selectedStudentIds.size === state.students.length;
+        selectAllStudents.checked = allSelected;
+        selectAllStudents.indeterminate = selectedStudentIds.size > 0 && !allSelected;
+
+        state.students.forEach((s, index) => {
+            const tr = document.createElement('tr');
+            const isSelected = selectedStudentIds.has(s.id);
+            tr.innerHTML = `
+                <td><input type="checkbox" class="student-checkbox" data-id="${s.id}" data-index="${index}" ${isSelected ? 'checked' : ''}></td>
+                <td>
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span>${s.name}</span>
+                        <button class="icon-btn edit-student-btn" data-id="${s.id}" style="opacity:0.5; padding:4px;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                        </button>
+                    </div>
+                </td>
+                <td style="color:var(--text-secondary); font-family:monospace;">${s.id}</td>
+            `;
+            
+            // Add hover effect for edit button
+            const btn = tr.querySelector('.edit-student-btn');
+            btn.onmouseover = () => btn.style.opacity = '1';
+            btn.onmouseout = () => btn.style.opacity = '0.5';
+            btn.onclick = (e) => {
+                e.stopPropagation(); // Prevent row click if we add one later
+                openEditStudentModal(s);
+            };
+
+            settingsStudentsTable.appendChild(tr);
+        });
+
+        updateSettingsButtons();
+    }
+
+    function updateSettingsButtons() {
+        const count = selectedStudentIds.size;
+        massDeleteBtn.disabled = count === 0;
+        massAddToActivityBtn.disabled = count === 0;
+        selectedCountText.textContent = `${count} student${count !== 1 ? 's' : ''} selected`;
+    }
+
+    navSettings.addEventListener('click', loadSettings);
+
+    selectAllStudents.addEventListener('change', (e) => {
+        if (e.target.checked) {
+            state.students.forEach(s => selectedStudentIds.add(s.id));
+        } else {
+            selectedStudentIds.clear();
+        }
+        renderSettings();
+    });
+
+    let lastCheckedIndex = -1;
+
+    settingsStudentsTable.addEventListener('change', (e) => {
+        if (e.target.classList.contains('student-checkbox')) {
+            const id = parseInt(e.target.dataset.id);
+            const index = parseInt(e.target.dataset.index);
+            const checked = e.target.checked;
+
+            if (e.shiftKey && lastCheckedIndex !== -1) {
+                const start = Math.min(lastCheckedIndex, index);
+                const end = Math.max(lastCheckedIndex, index);
+                
+                for (let i = start; i <= end; i++) {
+                    const s = state.students[i];
+                    if (checked) {
+                        selectedStudentIds.add(s.id);
+                    } else {
+                        selectedStudentIds.delete(s.id);
+                    }
+                }
+            } else {
+                if (checked) {
+                    selectedStudentIds.add(id);
+                } else {
+                    selectedStudentIds.delete(id);
+                }
+            }
+            
+            lastCheckedIndex = index;
+            renderSettings(); // Re-render to update header checkbox state and all checkboxes
+        }
+    });
+
+    massDeleteBtn.addEventListener('click', async () => {
+        if (!confirm(`Are you sure you want to delete ${selectedStudentIds.size} students? This cannot be undone.`)) return;
+        
+        const ids = Array.from(selectedStudentIds);
+        const res = await api('delete_students', 'POST', { ids: ids.join(',') });
+        if (res.error) return alert(res.error);
+        
+        await loadState();
+        loadSettings();
+    });
+
+    massAddToActivityBtn.addEventListener('click', () => {
+        addToActivityModal.classList.add('active');
+        targetActivitySelect.innerHTML = '<option value="">-- Select Activity --</option>';
+        state.activities.forEach(a => {
+            const opt = document.createElement('option');
+            opt.value = a.id;
+            opt.textContent = a.name;
+            targetActivitySelect.appendChild(opt);
+        });
+        updateSettingsButtons(); // Update count text
+    });
+
+    addToActivityForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const activityId = parseInt(targetActivitySelect.value);
+        if (!activityId) return;
+
+        const activity = state.activities.find(a => a.id === activityId);
+        if (!activity) return;
+
+        // Merge students
+        const currentIds = new Set(activity.student_ids || []);
+        selectedStudentIds.forEach(id => currentIds.add(id));
+        
+        const newIds = Array.from(currentIds);
+        
+        const res = await api('update_activity', 'POST', {
+            id: activity.id,
+            name: activity.name,
+            description: activity.description || '',
+            sessions_per_week: activity.sessions_per_week,
+            student_ids: newIds.join(',')
+        });
+
+        if (res.error) return alert(res.error);
+
+        addToActivityModal.classList.remove('active');
+        await loadState();
+        alert(`Added students to ${activity.name}`);
+    });
 
     navStats.addEventListener('click', loadStats);
     statsSearch.addEventListener('input', (e) => renderStatsTable(e.target.value));
@@ -864,6 +1045,11 @@
             closeModal(studentModal);
             await loadState();
             await loadAttendance();
+            
+            // If we are in settings view, refresh it
+            if (settingsArea.style.display !== 'none') {
+                renderSettings();
+            }
         } else alert(res.error || 'Failed');
     });
 

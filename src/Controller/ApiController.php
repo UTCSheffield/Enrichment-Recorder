@@ -52,6 +52,13 @@ class ApiController {
                     Student::delete($this->db, $id);
                     echo json_encode(['ok' => true]);
                     break;
+                case 'delete_students':
+                    $ids_str = $_POST['ids'] ?? '';
+                    $ids = $ids_str ? array_map('intval', explode(',', $ids_str)) : [];
+                    if (empty($ids)) { throw new Exception('IDs required'); }
+                    Student::deleteMany($this->db, $ids);
+                    echo json_encode(['ok' => true]);
+                    break;
                 case 'get_activities':
                     echo json_encode(['activities' => Activity::getAll($this->db)]);
                     break;

@@ -29,4 +29,18 @@ class Student {
         $stmt = $db->prepare('DELETE FROM attendance WHERE student_id = :id');
         $stmt->execute([':id' => $id]);
     }
+
+    public static function deleteMany(PDO $db, array $ids): void {
+        if (empty($ids)) return;
+        $inQuery = implode(',', array_fill(0, count($ids), '?'));
+        
+        $stmt = $db->prepare("DELETE FROM students WHERE id IN ($inQuery)");
+        $stmt->execute($ids);
+        
+        $stmt = $db->prepare("DELETE FROM attendance WHERE student_id IN ($inQuery)");
+        $stmt->execute($ids);
+        
+        $stmt = $db->prepare("DELETE FROM activity_students WHERE student_id IN ($inQuery)");
+        $stmt->execute($ids);
+    }
 }
