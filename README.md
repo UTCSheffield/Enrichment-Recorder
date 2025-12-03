@@ -4,11 +4,19 @@ A single-page PHP application to record student attendance for enrichment activi
 ## Run with Docker
 This setup runs the application with Apache/PHP and a MySQL database.
 
-1. Ensure **Docker Desktop** is installed and running.
-2. Run the following command in the project root:
+1. Ensure **Docker** is installed and running.
+2. Create a `.env` file from the example: (optionally use some other method to handle environment variables)
+
+   ```bash
+   cp .env.example .env
+   ```
+
+   and buddy, for the life of you, change the default password.
+
+3. Run the following command in the project root:
 
 ```bash
 docker compose up --build
 ```
 
-3. Open `http://localhost:8080` in your browser.
+4. Open `http://localhost:8080` (or the port defined in your `.env` file) in your browser.
