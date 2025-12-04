@@ -69,9 +69,13 @@
                 </button>
             </div>
             <div class="header-actions">
-                <button id="addStudentBtn" class="btn-primary">
+                <button id="createStudentBtn" class="btn-primary" style="display:none;">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:6px"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                    Add Student
+                    Create Student
+                </button>
+                <button id="assignStudentBtn" class="btn-primary" style="display:none;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:6px"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>
+                    Assign Students
                 </button>
             </div>
         </header>
@@ -287,6 +291,40 @@
             <div class="modal-footer">
                 <button type="button" class="btn-secondary close-modal">Cancel</button>
                 <button type="submit" class="btn-primary">Add Students</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Assign Students Modal -->
+<div id="assignStudentModal" class="modal-overlay" aria-hidden="true">
+    <div class="modal">
+        <div class="modal-header">
+            <h3>Assign Students</h3>
+            <button class="icon-btn close-modal">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+        </div>
+        <form id="assignStudentForm">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Students in this Activity</label>
+                    <div id="assignStudentTags" class="tags-input-container">
+                        <!-- Tags will go here -->
+                        <button type="button" id="assignStudentAddBtn" class="btn-tag-add">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                            Add
+                        </button>
+                    </div>
+                    <div id="assignStudentDropdown" class="student-picker-dropdown" style="display:none;">
+                        <input type="text" id="assignStudentSearch" placeholder="Search students..." autocomplete="off">
+                        <div id="assignStudentList" class="student-picker-list"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-secondary close-modal">Cancel</button>
+                <button type="submit" class="btn-primary">Save Changes</button>
             </div>
         </form>
     </div>

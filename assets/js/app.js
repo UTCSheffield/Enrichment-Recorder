@@ -57,7 +57,16 @@
     const selectedCountText = q('#selectedCountText');
 
     // Modal elements
-    const addStudentBtn = q('#addStudentBtn');
+    const createStudentBtn = q('#createStudentBtn');
+    const assignStudentBtn = q('#assignStudentBtn');
+    const assignStudentModal = q('#assignStudentModal');
+    const assignStudentForm = q('#assignStudentForm');
+    const assignStudentTags = q('#assignStudentTags');
+    const assignStudentAddBtn = q('#assignStudentAddBtn');
+    const assignStudentDropdown = q('#assignStudentDropdown');
+    const assignStudentSearch = q('#assignStudentSearch');
+    const assignStudentList = q('#assignStudentList');
+
     const studentModal = q('#studentModal');
     const studentForm = q('#studentForm');
     const studentIdInput = q('#studentIdInput');
@@ -127,6 +136,9 @@
         settingsArea.style.display = 'none';
         navStats.classList.remove('active');
         navSettings.classList.remove('active');
+        
+        createStudentBtn.style.display = 'none';
+        assignStudentBtn.style.display = 'flex';
 
         renderActivities();
         const act = state.activities.find(x => x.id == id);
@@ -151,6 +163,8 @@
         activityTitle.textContent = 'Statistics';
         activityDescription.textContent = '';
         editActivityBtn.style.display = 'none';
+        createStudentBtn.style.display = 'none';
+        assignStudentBtn.style.display = 'none';
 
         const res = await api('get_stats');
         if (res.error) return alert(res.error);
@@ -272,6 +286,8 @@
         activityTitle.textContent = 'Settings';
         activityDescription.textContent = '';
         editActivityBtn.style.display = 'none';
+        createStudentBtn.style.display = 'flex';
+        assignStudentBtn.style.display = 'none';
         
         selectedStudentIds.clear();
         renderSettings();
@@ -529,6 +545,77 @@
         }
     });
 
+    // --- Assign Student Modal Logic ---
+    let assignStudentIds = [];
+
+    function renderAssignTags() {
+        // Clear existing tags but keep the add button
+        const tags = assignStudentTags.querySelectorAll('.tag-chip');
+        tags.forEach(t => t.remove());
+
+        assignStudentIds.forEach(sid => {
+            const s = state.students.find(x => x.id == sid);
+            if (!s) return;
+
+            const chip = document.createElement('div');
+            chip.className = 'tag-chip';
+            chip.innerHTML = `
+            <span>${s.name}</span>
+            <span class="tag-remove" data-id="${sid}">&times;</span>
+          `;
+            chip.querySelector('.tag-remove').onclick = () => {
+                assignStudentIds = assignStudentIds.filter(id => id !== sid);
+                renderAssignTags();
+            };
+            assignStudentTags.insertBefore(chip, assignStudentAddBtn);
+        });
+    }
+
+    function renderAssignPicker(filter = '') {
+        assignStudentList.innerHTML = '';
+        const available = state.students.filter(s => !assignStudentIds.includes(s.id));
+        const filtered = available.filter(s => s.name.toLowerCase().includes(filter.toLowerCase()));
+
+        if (filtered.length === 0) {
+            assignStudentList.innerHTML = '<div style="padding:8px; color:var(--text-secondary); font-size:12px;">No students found</div>';
+            return;
+        }
+
+        filtered.forEach(s => {
+            const item = document.createElement('div');
+            item.className = 'picker-item';
+            item.textContent = s.name;
+            item.onclick = () => {
+                assignStudentIds.push(s.id);
+                renderAssignTags();
+                assignStudentDropdown.style.display = 'none';
+                assignStudentSearch.value = '';
+            };
+            assignStudentList.appendChild(item);
+        });
+    }
+
+    assignStudentAddBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isVisible = assignStudentDropdown.style.display === 'flex';
+        assignStudentDropdown.style.display = isVisible ? 'none' : 'flex';
+        if (!isVisible) {
+            renderAssignPicker();
+            assignStudentSearch.focus();
+        }
+    });
+
+    assignStudentSearch.addEventListener('input', (e) => {
+        renderAssignPicker(e.target.value);
+    });
+
+    // Close picker when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!assignStudentDropdown.contains(e.target) && e.target !== assignStudentAddBtn) {
+            assignStudentDropdown.style.display = 'none';
+        }
+    });
+
     function renderRegister() {
         if (!selectedActivity) {
             registerArea.innerHTML = '<div class="empty-state">Select an activity from the sidebar to view the register.</div>';
@@ -738,7 +825,39 @@
         openModal(studentModal);
     }
 
-    addStudentBtn.addEventListener('click', openCreateStudentModal);
+    assignStudentBtn.addEventListener('click', () => {
+        if (!selectedActivity) return;
+        const act = state.activities.find(x => x.id == selectedActivity);
+        if (!act) return;
+
+        assignStudentIds = [...(act.student_ids || [])];
+        renderAssignTags();
+        openModal(assignStudentModal);
+    });
+
+    assignStudentForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const act = state.activities.find(x => x.id == selectedActivity);
+        if (!act) return;
+
+        const res = await api('update_activity', 'POST', {
+            id: act.id,
+            name: act.name,
+            description: act.description || '',
+            sessions_per_week: act.sessions_per_week,
+            student_ids: assignStudentIds.join(',')
+        });
+
+        if (res.ok) {
+            closeModal(assignStudentModal);
+            await loadState();
+            await loadAttendance(); // Refresh register
+        } else {
+            alert(res.error || 'Failed to update students');
+        }
+    });
+
+    createStudentBtn.addEventListener('click', openCreateStudentModal);
     if (addActivityBtn) addActivityBtn.addEventListener('click', openCreateActivityModal);
     if (editActivityBtn) editActivityBtn.addEventListener('click', openEditActivityModal);
 
@@ -748,7 +867,7 @@
     }));
 
     // Close on click outside
-    [studentModal, activityModal, q('#studentStatsModal'), q('#activityStatsModal')].forEach(m => {
+    [studentModal, activityModal, assignStudentModal, q('#studentStatsModal'), q('#activityStatsModal')].forEach(m => {
         if (!m) return;
         m.addEventListener('click', (e) => {
             if (e.target === m) closeModal(m);
@@ -1149,19 +1268,41 @@
             let count = 0;
 
             for (const line of lines) {
-                const trimmed = line.trim();
+                let trimmed = line.trim();
                 if (!trimmed) continue;
 
-                // Format: LASTNAME Firstname
-                const parts = trimmed.split(/\s+/);
-                if (parts.length < 2) continue;
-
                 // Capitalize function
-                const capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+                const capitalize = (s) => {
+                    if (!s) return '';
+                    return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+                };
 
-                // Assume first part is Last Name, rest is First Name
-                let lastName = capitalize(parts[0]);
-                let firstName = parts.slice(1).map(p => capitalize(p)).join(' ');
+                let firstName = '';
+                let lastName = '';
+
+                // Check for "Last, First" format (with or without quotes)
+                if (trimmed.includes(',')) {
+                    // Remove quotes if present
+                    trimmed = trimmed.replace(/['"]/g, '');
+                    const parts = trimmed.split(',');
+                    if (parts.length >= 2) {
+                        lastName = parts[0].trim();
+                        firstName = parts[1].trim();
+                    }
+                } else {
+                    // Assume "Last First" format (space separated)
+                    const parts = trimmed.split(/\s+/);
+                    if (parts.length >= 2) {
+                        lastName = parts[0];
+                        firstName = parts.slice(1).join(' ');
+                    }
+                }
+
+                if (!firstName || !lastName) continue;
+
+                lastName = capitalize(lastName);
+                // Handle multi-part first names
+                firstName = firstName.split(/\s+/).map(p => capitalize(p)).join(' ');
 
                 const fullName = `${firstName} ${lastName}`;
 
