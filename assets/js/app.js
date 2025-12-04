@@ -263,6 +263,7 @@
     function renderStatsTable(filter = '') {
         statsTable.innerHTML = '';
         const term = filter.toLowerCase();
+        // sam was here
 
         state.students.forEach(s => {
             if (term && !s.name.toLowerCase().includes(term)) return;
