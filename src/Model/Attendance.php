@@ -114,4 +114,57 @@ class Attendance {
 
         return ['total' => $total, 'by_student' => $byStudent, 'weekly' => $weekly];
     }
+
+    public static function getActivityExportData(PDO $db, int $activityId): array {
+        $sql = "
+            SELECT 
+                s.name as student_name,
+                att.week_start,
+                COUNT(*) as count
+            FROM attendance att
+            JOIN students s ON att.student_id = s.id
+            WHERE att.activity_id = :aid AND att.present = 1
+            GROUP BY s.name, att.week_start
+            ORDER BY s.name, att.week_start
+        ";
+        $stmt = $db->prepare($sql);
+        $stmt->execute([':aid' => $activityId]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    public static function getExportData(PDO $db): array {
+        // Get per-week stats per student
+        $sql = "
+            SELECT 
+                s.id as student_id,
+                s.name as student_name,
+                att.week_start,
+                SUM(CASE WHEN att.present = 1 THEN 1 ELSE 0 END) as attended,
+                SUM(CASE WHEN att.present = 0 THEN 1 ELSE 0 END) as missed
+            FROM attendance att
+            JOIN students s ON att.student_id = s.id
+            GROUP BY s.id, att.week_start
+            ORDER BY s.name, att.week_start
+        ";
+        $stmt = $db->query($sql);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Get total stats per student
+        $sqlTotal = "
+            SELECT 
+                student_id,
+                SUM(CASE WHEN present = 1 THEN 1 ELSE 0 END) as total_attended
+            FROM attendance
+            GROUP BY student_id
+        ";
+        $stmtTotal = $db->query($sqlTotal);
+        $totals = $stmtTotal->fetchAll(PDO::FETCH_KEY_PAIR);
+
+        // Merge totals into rows
+        foreach ($rows as &$row) {
+            $row['total_attended_all_time'] = $totals[$row['student_id']] ?? 0;
+        }
+
+        return $rows;
+    }
 }

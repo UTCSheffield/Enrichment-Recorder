@@ -113,6 +113,14 @@ class ApiController {
                     if (!$id) throw new Exception('ID required');
                     echo json_encode(['stats' => Attendance::getActivityStats($this->db, $id)]);
                     break;
+                case 'get_activity_export':
+                    $id = intval($_GET['id'] ?? 0);
+                    if (!$id) throw new Exception('ID required');
+                    echo json_encode(['data' => Attendance::getActivityExportData($this->db, $id)]);
+                    break;
+                case 'get_export_stats':
+                    echo json_encode(['data' => Attendance::getExportData($this->db)]);
+                    break;
                 case 'toggle_attendance':
                     $student_id = intval($_POST['student_id'] ?? 0);
                     $activity_id = intval($_POST['activity_id'] ?? 0);

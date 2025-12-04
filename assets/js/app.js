@@ -40,6 +40,7 @@
     const statTotalActivities = q('#statTotalActivities');
     const statTotalAttendance = q('#statTotalAttendance');
     const statsTable = q('#statsTable tbody');
+    const statsActivitiesTable = q('#statsActivitiesTable tbody');
     const statsSearch = q('#statsSearch');
     const downloadCsvBtn = q('#downloadCsvBtn');
     let chartWeekly = null;
@@ -189,6 +190,7 @@
 
         // Table
         renderStatsTable();
+        renderStatsActivitiesTable();
     }
 
     function renderCharts() {
@@ -272,6 +274,26 @@
             <td>${actNames || '<span style="color:var(--text-secondary)">None</span>'}</td>
           `;
             statsTable.appendChild(tr);
+        });
+    }
+
+    function renderStatsActivitiesTable() {
+        statsActivitiesTable.innerHTML = '';
+        
+        state.activities.forEach(a => {
+            const totalAttendance = statsData.activities[a.id] || 0;
+            const numWeeks = statsData.weekly.length || 1;
+            const avgPerWeek = (totalAttendance / numWeeks).toFixed(1);
+
+            const tr = document.createElement('tr');
+            tr.style.cursor = 'pointer';
+            tr.innerHTML = `
+                <td>${a.name}</td>
+                <td>${avgPerWeek}</td>
+                <td>${totalAttendance}</td>
+            `;
+            tr.onclick = () => openActivityStats(a.id);
+            statsActivitiesTable.appendChild(tr);
         });
     }
 
@@ -436,28 +458,12 @@
     navStats.addEventListener('click', loadStats);
     statsSearch.addEventListener('input', (e) => renderStatsTable(e.target.value));
 
-    downloadCsvBtn.addEventListener('click', () => {
-        let csv = 'Student Name,Total Sessions Attended,Assigned Activities\n';
-        state.students.forEach(s => {
-            const attended = statsData.students[s.id] || 0;
-            const inActivities = state.activities.filter(a => (a.student_ids || []).includes(s.id));
-            const actNames = inActivities.map(a => a.name).join('; '); // Semicolon for CSV safety
-
-            // Escape quotes
-            const safeName = `"${s.name.replace(/"/g, '""')}"`;
-            const safeActs = `"${actNames.replace(/"/g, '""')}"`;
-
-            csv += `${safeName},${attended},${safeActs}\n`;
-        });
-
-        const blob = new Blob([csv], { type: 'text/csv' });
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `enrichment_stats_${new Date().toISOString().slice(0, 10)}.csv`;
-        a.click();
-    });
-
+    // Helper for CSV dates (YYYY-MM-DD -> DD-MM-YY)
+    function formatCsvDate(iso) {
+        if (!iso) return '';
+        const [y, m, d] = iso.split('-');
+        return `${d}-${m}-${y.slice(2)}`;
+    }
 
     async function loadAttendance() {
         if (!selectedActivity) return;
@@ -937,17 +943,32 @@
         const res = await api('get_student_stats', 'GET', { id: currentStatsStudent.id });
         const stats = res.stats;
 
-        let csv = `Student Report: ${currentStatsStudent.name}\n\n`;
-        csv += `Total Sessions,${stats.total}\n\n`;
+        let csv = `Title,Value\n`;
+        csv += `Student Name,"${currentStatsStudent.name}"\n`;
+        
+        // Activities Part Of
+        const inActivities = state.activities.filter(a => (a.student_ids || []).includes(currentStatsStudent.id));
+        const actNames = inActivities.map(a => a.name).join(', ');
+        csv += `Activities Part Of,"${actNames}"\n`;
+        
+        csv += `Total Sessions,${stats.total}\n`;
 
-        csv += `Activity Breakdown\nActivity,Sessions\n`;
-        Object.entries(stats.by_activity).forEach(([name, count]) => {
-            csv += `"${name}",${count}\n`;
+        // Group history by week
+        const weeklyData = {};
+        stats.history.forEach(h => {
+            if (!weeklyData[h.week_start]) weeklyData[h.week_start] = {};
+            if (!weeklyData[h.week_start][h.activity_name]) weeklyData[h.week_start][h.activity_name] = 0;
+            weeklyData[h.week_start][h.activity_name]++;
         });
 
-        csv += `\nDetailed History\nDate,Activity,Session\n`;
-        stats.history.forEach(h => {
-            csv += `${h.week_start},"${h.activity_name}",${h.session_index}\n`;
+        // Sort weeks
+        const weeks = Object.keys(weeklyData).sort();
+        
+        weeks.forEach(w => {
+            const activities = Object.entries(weeklyData[w])
+                .map(([name, count]) => `${name} * ${count}`)
+                .join(', ');
+            csv += `W/C ${formatCsvDate(w)},"${activities}"\n`;
         });
 
         const blob = new Blob([csv], { type: 'text/csv' });
@@ -1021,20 +1042,40 @@
 
     downloadActivityCsvBtn.addEventListener('click', async () => {
         if (!currentStatsActivity) return;
-        const res = await api('get_activity_stats', 'GET', { id: currentStatsActivity.id });
-        const stats = res.stats;
-
-        let csv = `Activity Report: ${currentStatsActivity.name}\n\n`;
-        csv += `Total Attendance,${stats.total}\n\n`;
-
-        csv += `Student Breakdown\nStudent,Sessions Attended\n`;
-        Object.entries(stats.by_student).forEach(([name, count]) => {
-            csv += `"${name}",${count}\n`;
+        const res = await api('get_activity_export', 'GET', { id: currentStatsActivity.id });
+        if (res.error) return alert(res.error);
+        
+        const rawData = res.data;
+        
+        // 1. Get all unique weeks and sort them
+        const weeksSet = new Set();
+        rawData.forEach(r => weeksSet.add(r.week_start));
+        const weeks = Array.from(weeksSet).sort();
+        
+        // 2. Map attendance data
+        const attendanceMap = {};
+        rawData.forEach(r => {
+            if (!attendanceMap[r.student_name]) {
+                attendanceMap[r.student_name] = {
+                    weeks: {},
+                    total: 0
+                };
+            }
+            const count = parseInt(r.count);
+            attendanceMap[r.student_name].weeks[r.week_start] = count;
+            attendanceMap[r.student_name].total += count;
         });
 
-        csv += `\nWeekly Trend\nWeek,Count\n`;
-        stats.weekly.forEach(w => {
-            csv += `${w.week_start},${w.count}\n`;
+        // 3. Build CSV
+        let csv = 'Student Name,' + weeks.map(w => `W/C ${formatCsvDate(w)}`).join(',') + ',Total Sessions Attended\n';
+        
+        // Sort students by name
+        const studentNames = Object.keys(attendanceMap).sort();
+        
+        studentNames.forEach(name => {
+            const data = attendanceMap[name];
+            const weekCols = weeks.map(w => data.weeks[w] || 0).join(',');
+            csv += `"${name}",${weekCols},${data.total}\n`;
         });
 
         const blob = new Blob([csv], { type: 'text/csv' });

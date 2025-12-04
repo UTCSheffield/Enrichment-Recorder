@@ -411,6 +411,9 @@ kbd {
     background: var(--bg-content);
     width: 100%;
     max-width: 400px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
     border-radius: 12px;
     box-shadow: 0 20px 40px rgba(0,0,0,0.2);
     transform: scale(0.95);
@@ -439,6 +442,7 @@ kbd {
     display: flex;
     flex-direction: column;
     gap: 16px;
+    overflow-y: auto;
 }
 
 .form-group {

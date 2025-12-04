@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=0" />
     <title>Enrichment Activity Recorder</title>
-    <link rel="stylesheet" href="/assets/css/styles.css">
+    <link rel="stylesheet" href="/assets/css/styles.css?v=1.0">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -117,10 +117,6 @@
                         <h3>Student Performance</h3>
                         <div style="display:flex; gap:8px;">
                             <input type="text" id="statsSearch" placeholder="Search students..." style="width:200px;">
-                            <button id="downloadCsvBtn" class="btn-secondary">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                                Export CSV
-                            </button>
                         </div>
                     </div>
                     <table class="students-table" id="statsTable">
@@ -129,6 +125,20 @@
                                 <th>Student</th>
                                 <th>Sessions Attended</th>
                                 <th>Activities</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+
+                <div class="stats-table-container" style="margin-top: 24px;">
+                    <h3>Activities</h3>
+                    <table class="students-table" id="statsActivitiesTable">
+                        <thead>
+                            <tr>
+                                <th>Activity Name</th>
+                                <th>Sessions / Week</th>
+                                <th>Total Attendance</th>
                             </tr>
                         </thead>
                         <tbody></tbody>
@@ -431,6 +441,6 @@
 
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/plugins/weekSelect/weekSelect.js"></script>
-<script src="/assets/js/app.js" defer></script>
+<script src="/assets/js/app.js?v=1.0" defer></script>
 </body>
 </html>
