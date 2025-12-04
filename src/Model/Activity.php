@@ -6,7 +6,7 @@ use PDO;
 
 class Activity {
     public static function getAll(PDO $db): array {
-        $stmt = $db->query('SELECT id, name, description, sessions_per_week FROM activities ORDER BY name');
+        $stmt = $db->query('SELECT id, name, description, department, sessions_per_week FROM activities ORDER BY name');
         $activities = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
         // Fetch associations
@@ -25,9 +25,9 @@ class Activity {
         return $activities;
     }
 
-    public static function create(PDO $db, string $name, string $description, int $sessions, array $studentIds = []): int {
-        $stmt = $db->prepare('INSERT INTO activities (name, description, sessions_per_week) VALUES (:name, :description, :sessions)');
-        $stmt->execute([':name' => $name, ':description' => $description, ':sessions' => $sessions]);
+    public static function create(PDO $db, string $name, string $description, string $department, int $sessions, array $studentIds = []): int {
+        $stmt = $db->prepare('INSERT INTO activities (name, description, department, sessions_per_week) VALUES (:name, :description, :department, :sessions)');
+        $stmt->execute([':name' => $name, ':description' => $description, ':department' => $department, ':sessions' => $sessions]);
         $id = (int)$db->lastInsertId();
         
         if (!empty($studentIds)) {
@@ -40,9 +40,9 @@ class Activity {
         return $id;
     }
 
-    public static function update(PDO $db, int $id, string $name, string $description, int $sessions, array $studentIds): void {
-        $stmt = $db->prepare('UPDATE activities SET name = :name, description = :description, sessions_per_week = :sessions WHERE id = :id');
-        $stmt->execute([':name' => $name, ':description' => $description, ':sessions' => $sessions, ':id' => $id]);
+    public static function update(PDO $db, int $id, string $name, string $description, string $department, int $sessions, array $studentIds): void {
+        $stmt = $db->prepare('UPDATE activities SET name = :name, description = :description, department = :department, sessions_per_week = :sessions WHERE id = :id');
+        $stmt->execute([':name' => $name, ':description' => $description, ':department' => $department, ':sessions' => $sessions, ':id' => $id]);
         
         // Update associations
         $db->prepare('DELETE FROM activity_students WHERE activity_id = :id')->execute([':id' => $id]);

@@ -41,6 +41,8 @@
     const statTotalAttendance = q('#statTotalAttendance');
     const statsTable = q('#statsTable tbody');
     const statsActivitiesTable = q('#statsActivitiesTable tbody');
+    const statsYearGroupsTable = q('#statsYearGroupsTable tbody');
+    const statsDepartmentsTable = q('#statsDepartmentsTable tbody');
     const statsSearch = q('#statsSearch');
     const downloadCsvBtn = q('#downloadCsvBtn');
     let chartWeekly = null;
@@ -73,6 +75,7 @@
     const studentIdInput = q('#studentIdInput');
     const firstNameInput = q('#firstName');
     const lastNameInput = q('#lastName');
+    const studentYearGroup = q('#studentYearGroup');
     const studentModalTitle = q('#studentModalTitle');
     const saveStudentBtn = q('#saveStudentBtn');
     const deleteStudentBtn = q('#deleteStudentBtn');
@@ -82,6 +85,7 @@
     const activityIdInput = q('#activityIdInput');
     const activityNameInput = q('#activityNameInput');
     const activityDescriptionInput = q('#activityDescriptionInput');
+    const activityDepartmentInput = q('#activityDepartmentInput');
     const activitySessionsInput = q('#activitySessions');
     const activityModalTitle = q('#activityModalTitle');
     const saveActivityBtn = q('#saveActivityBtn');
@@ -191,6 +195,8 @@
         // Table
         renderStatsTable();
         renderStatsActivitiesTable();
+        renderStatsYearGroupsTable();
+        renderStatsDepartmentsTable();
     }
 
     function renderCharts() {
@@ -295,6 +301,103 @@
             tr.onclick = () => openActivityStats(a.id);
             statsActivitiesTable.appendChild(tr);
         });
+    }
+
+    function renderStatsYearGroupsTable() {
+        statsYearGroupsTable.innerHTML = '';
+        const groups = statsData.year_groups || {};
+        
+        // Sort keys (9, 10, 11...)
+        Object.keys(groups).sort((a,b) => parseInt(a)-parseInt(b)).forEach(yg => {
+            const count = groups[yg];
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>Year ${yg}</td>
+                <td>${count}</td>
+                <td><button class="btn-sm download-yg-btn" data-yg="${yg}">Download CSV</button></td>
+            `;
+            
+            tr.querySelector('.download-yg-btn').onclick = async (e) => {
+                e.stopPropagation();
+                await downloadYearGroupCsv(yg);
+            };
+            
+            statsYearGroupsTable.appendChild(tr);
+        });
+    }
+
+    function renderStatsDepartmentsTable() {
+        statsDepartmentsTable.innerHTML = '';
+        const depts = statsData.departments || {};
+        
+        Object.keys(depts).sort().forEach(dept => {
+            const count = depts[dept];
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${dept}</td>
+                <td>${count}</td>
+                <td><button class="btn-sm download-dept-btn" data-dept="${dept}">Download CSV</button></td>
+            `;
+            
+            tr.querySelector('.download-dept-btn').onclick = async (e) => {
+                e.stopPropagation();
+                await downloadDepartmentCsv(dept);
+            };
+            
+            statsDepartmentsTable.appendChild(tr);
+        });
+    }
+
+    async function downloadYearGroupCsv(yearGroup) {
+        const res = await api('get_year_group_export', 'GET', { year_group: yearGroup });
+        if (res.error) return alert(res.error);
+        processAndDownloadCsv(res.data, `Year_${yearGroup}_Report.csv`);
+    }
+
+    async function downloadDepartmentCsv(department) {
+        const res = await api('get_department_export', 'GET', { department: department });
+        if (res.error) return alert(res.error);
+        processAndDownloadCsv(res.data, `${department}_Report.csv`);
+    }
+
+    function processAndDownloadCsv(rawData, filename) {
+        // 1. Get all unique weeks and sort them
+        const weeksSet = new Set();
+        rawData.forEach(r => weeksSet.add(r.week_start));
+        const weeks = Array.from(weeksSet).sort();
+        
+        // 2. Map attendance data
+        const attendanceMap = {};
+        rawData.forEach(r => {
+            if (!attendanceMap[r.student_name]) {
+                attendanceMap[r.student_name] = {
+                    weeks: {},
+                    total: 0
+                };
+            }
+            const count = parseInt(r.count);
+            attendanceMap[r.student_name].weeks[r.week_start] = count;
+            attendanceMap[r.student_name].total += count;
+        });
+
+        // 3. Build CSV
+        let csv = 'Student Name,' + weeks.map(w => `W/C ${formatCsvDate(w)}`).join(',') + ',Total Sessions Attended\n';
+        
+        // Sort students by name
+        const studentNames = Object.keys(attendanceMap).sort();
+        
+        studentNames.forEach(name => {
+            const data = attendanceMap[name];
+            const weekCols = weeks.map(w => data.weeks[w] || 0).join(',');
+            csv += `"${name}",${weekCols},${data.total}\n`;
+        });
+
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
     }
 
     function loadSettings() {
@@ -711,6 +814,7 @@
         const id = activityIdInput.value;
         const name = activityNameInput.value.trim();
         const description = activityDescriptionInput.value.trim();
+        const department = activityDepartmentInput.value;
         const sessions = activitySessionsInput.value;
 
         if (!name) return;
@@ -721,10 +825,10 @@
         let res;
         if (id) {
             // Update
-            res = await api('update_activity', 'POST', { id, name, description, sessions_per_week: sessions, student_ids: studentIdsStr });
+            res = await api('update_activity', 'POST', { id, name, description, department, sessions_per_week: sessions, student_ids: studentIdsStr });
         } else {
             // Create
-            res = await api('create_activity', 'POST', { name, description, sessions_per_week: sessions, student_ids: studentIdsStr });
+            res = await api('create_activity', 'POST', { name, description, department, sessions_per_week: sessions, student_ids: studentIdsStr });
         }
 
         if (res.ok) {
@@ -768,6 +872,7 @@
         activityIdInput.value = '';
         activityNameInput.value = '';
         activityDescriptionInput.value = '';
+        activityDepartmentInput.value = 'Other';
         activitySessionsInput.value = '1';
         activityModalTitle.textContent = 'New Activity';
         saveActivityBtn.textContent = 'Create Activity';
@@ -787,6 +892,7 @@
         activityIdInput.value = act.id;
         activityNameInput.value = act.name;
         activityDescriptionInput.value = act.description || '';
+        activityDepartmentInput.value = act.department || 'Other';
         activitySessionsInput.value = act.sessions_per_week;
         activityModalTitle.textContent = 'Edit Activity';
         saveActivityBtn.textContent = 'Save Changes';
@@ -814,6 +920,7 @@
         studentIdInput.value = '';
         firstNameInput.value = '';
         lastNameInput.value = '';
+        studentYearGroup.value = '9';
         studentModalTitle.textContent = 'Add New Student';
         saveStudentBtn.textContent = 'Add Student';
         deleteStudentBtn.style.display = 'none';
@@ -825,6 +932,7 @@
         const parts = student.name.split(' ');
         firstNameInput.value = parts[0] || '';
         lastNameInput.value = parts.slice(1).join(' ') || '';
+        studentYearGroup.value = student.year_group || '9';
         studentModalTitle.textContent = 'Edit Student';
         saveStudentBtn.textContent = 'Save Changes';
         deleteStudentBtn.style.display = 'block';
@@ -1190,15 +1298,16 @@
         const id = studentIdInput.value;
         const first = firstNameInput.value.trim();
         const last = lastNameInput.value.trim();
+        const yearGroup = studentYearGroup.value;
         if (!first || !last) return;
 
         const fullName = `${first} ${last}`;
 
         let res;
         if (id) {
-            res = await api('update_student', 'POST', { id, name: fullName });
+            res = await api('update_student', 'POST', { id, name: fullName, year_group: yearGroup });
         } else {
-            res = await api('create_student', 'POST', { name: fullName });
+            res = await api('create_student', 'POST', { name: fullName, year_group: yearGroup });
         }
 
         if (res.ok) {
@@ -1312,6 +1421,27 @@
                 let trimmed = line.trim();
                 if (!trimmed) continue;
 
+                // Remove quotes
+                trimmed = trimmed.replace(/['"]/g, '');
+                
+                const parts = trimmed.split(',').map(p => p.trim());
+                let yearGroup = 9;
+                let namePart = trimmed;
+
+                // Check if last part is a year group
+                if (parts.length > 1) {
+                    const last = parts[parts.length - 1];
+                    const match = last.match(/(\d+)/);
+                    if (match) {
+                        const val = parseInt(match[1]);
+                        if (val >= 9 && val <= 13) {
+                            yearGroup = val;
+                            // Reconstruct name part from the rest
+                            namePart = parts.slice(0, -1).join(',');
+                        }
+                    }
+                }
+
                 // Capitalize function
                 const capitalize = (s) => {
                     if (!s) return '';
@@ -1321,33 +1451,29 @@
                 let firstName = '';
                 let lastName = '';
 
-                // Check for "Last, First" format (with or without quotes)
-                if (trimmed.includes(',')) {
-                    // Remove quotes if present
-                    trimmed = trimmed.replace(/['"]/g, '');
-                    const parts = trimmed.split(',');
-                    if (parts.length >= 2) {
-                        lastName = parts[0].trim();
-                        firstName = parts[1].trim();
+                // Parse Name
+                if (namePart.includes(',')) {
+                    const nParts = namePart.split(',');
+                    if (nParts.length >= 2) {
+                        lastName = nParts[0].trim();
+                        firstName = nParts[1].trim();
                     }
                 } else {
-                    // Assume "Last First" format (space separated)
-                    const parts = trimmed.split(/\s+/);
-                    if (parts.length >= 2) {
-                        lastName = parts[0];
-                        firstName = parts.slice(1).join(' ');
+                    const nParts = namePart.split(/\s+/);
+                    if (nParts.length >= 2) {
+                        lastName = nParts[0];
+                        firstName = nParts.slice(1).join(' ');
                     }
                 }
 
                 if (!firstName || !lastName) continue;
 
                 lastName = capitalize(lastName);
-                // Handle multi-part first names
                 firstName = firstName.split(/\s+/).map(p => capitalize(p)).join(' ');
 
                 const fullName = `${firstName} ${lastName}`;
 
-                const res = await api('create_student', 'POST', { name: fullName });
+                const res = await api('create_student', 'POST', { name: fullName, year_group: yearGroup });
                 if (res.ok) count++;
             }
 

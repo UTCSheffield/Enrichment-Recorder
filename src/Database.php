@@ -41,13 +41,21 @@ class Database {
         $db->exec("CREATE TABLE IF NOT EXISTS students (
             id INT AUTO_INCREMENT PRIMARY KEY,
             name VARCHAR(255) NOT NULL,
+            year_group INT DEFAULT 9,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB;");
+
+        // Migration: Check if year_group exists, if not add it
+        $stmt = $db->query("SHOW COLUMNS FROM students LIKE 'year_group'");
+        if ($stmt->rowCount() === 0) {
+            $db->exec("ALTER TABLE students ADD COLUMN year_group INT DEFAULT 9 AFTER name");
+        }
 
         $db->exec("CREATE TABLE IF NOT EXISTS activities (
             id INT AUTO_INCREMENT PRIMARY KEY,
             name VARCHAR(255) NOT NULL,
             description TEXT,
+            department VARCHAR(50) DEFAULT 'Other',
             sessions_per_week INT NOT NULL DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB;");
@@ -56,6 +64,12 @@ class Database {
         try {
             $db->exec("ALTER TABLE activities ADD COLUMN description TEXT");
         } catch (Exception $e) { /* Ignore if already exists */ }
+
+        // Migration: Check if department exists in activities
+        $stmt = $db->query("SHOW COLUMNS FROM activities LIKE 'department'");
+        if ($stmt->rowCount() === 0) {
+            $db->exec("ALTER TABLE activities ADD COLUMN department VARCHAR(50) DEFAULT 'Other' AFTER description");
+        }
 
         $db->exec("CREATE TABLE IF NOT EXISTS attendance (
             id INT AUTO_INCREMENT PRIMARY KEY,

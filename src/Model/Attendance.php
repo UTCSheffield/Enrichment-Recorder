@@ -41,6 +41,26 @@ class Attendance {
         $stmt = $db->query("SELECT activity_id, COUNT(*) as count FROM attendance WHERE present = 1 GROUP BY activity_id");
         $activityStats = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
 
+        // Total present per year group
+        $stmt = $db->query("
+            SELECT s.year_group, COUNT(*) as count 
+            FROM attendance att
+            JOIN students s ON att.student_id = s.id
+            WHERE att.present = 1 
+            GROUP BY s.year_group
+        ");
+        $yearGroupStats = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+
+        // Total present per department
+        $stmt = $db->query("
+            SELECT a.department, COUNT(*) as count 
+            FROM attendance att
+            JOIN activities a ON att.activity_id = a.id
+            WHERE att.present = 1 
+            GROUP BY a.department
+        ");
+        $departmentStats = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+
         // Attendance over time (by week)
         $stmt = $db->query("SELECT week_start, COUNT(*) as count FROM attendance WHERE present = 1 GROUP BY week_start ORDER BY week_start");
         $weeklyStats = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -48,6 +68,8 @@ class Attendance {
         return [
             'students' => $studentStats,
             'activities' => $activityStats,
+            'year_groups' => $yearGroupStats,
+            'departments' => $departmentStats,
             'weekly' => $weeklyStats
         ];
     }
@@ -129,6 +151,41 @@ class Attendance {
         ";
         $stmt = $db->prepare($sql);
         $stmt->execute([':aid' => $activityId]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    public static function getYearGroupExportData(PDO $db, int $yearGroup): array {
+        $sql = "
+            SELECT 
+                s.name as student_name,
+                att.week_start,
+                COUNT(*) as count
+            FROM attendance att
+            JOIN students s ON att.student_id = s.id
+            WHERE s.year_group = :yg AND att.present = 1
+            GROUP BY s.name, att.week_start
+            ORDER BY s.name, att.week_start
+        ";
+        $stmt = $db->prepare($sql);
+        $stmt->execute([':yg' => $yearGroup]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    public static function getDepartmentExportData(PDO $db, string $department): array {
+        $sql = "
+            SELECT 
+                s.name as student_name,
+                att.week_start,
+                COUNT(*) as count
+            FROM attendance att
+            JOIN students s ON att.student_id = s.id
+            JOIN activities a ON att.activity_id = a.id
+            WHERE a.department = :dept AND att.present = 1
+            GROUP BY s.name, att.week_start
+            ORDER BY s.name, att.week_start
+        ";
+        $stmt = $db->prepare($sql);
+        $stmt->execute([':dept' => $department]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 

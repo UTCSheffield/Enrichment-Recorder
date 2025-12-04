@@ -34,16 +34,18 @@ class ApiController {
                     break;
                 case 'create_student':
                     $name = trim($_POST['name'] ?? '');
+                    $yearGroup = intval($_POST['year_group'] ?? 9);
                     if ($name === '') { throw new Exception('Name required'); }
-                    $id = Student::create($this->db, $name);
+                    $id = Student::create($this->db, $name, $yearGroup);
                     echo json_encode(['ok' => true, 'id' => $id]);
                     break;
                 case 'update_student':
                     $id = intval($_POST['id'] ?? 0);
                     $name = trim($_POST['name'] ?? '');
+                    $yearGroup = intval($_POST['year_group'] ?? 9);
                     if (!$id) { throw new Exception('ID required'); }
                     if ($name === '') { throw new Exception('Name required'); }
-                    Student::update($this->db, $id, $name);
+                    Student::update($this->db, $id, $name, $yearGroup);
                     echo json_encode(['ok' => true]);
                     break;
                 case 'delete_student':
@@ -65,19 +67,21 @@ class ApiController {
                 case 'create_activity':
                     $name = trim($_POST['name'] ?? '');
                     $description = trim($_POST['description'] ?? '');
+                    $department = trim($_POST['department'] ?? 'Other');
                     $sessions = intval($_POST['sessions_per_week'] ?? 1);
                     $sids_str = $_POST['student_ids'] ?? '';
                     $studentIds = $sids_str ? array_map('intval', explode(',', $sids_str)) : [];
                     
                     if ($name === '') { throw new Exception('Name required'); }
                     if ($sessions < 1 || $sessions > 7) { throw new Exception('sessions_per_week must be 1..7'); }
-                    $id = Activity::create($this->db, $name, $description, $sessions, $studentIds);
+                    $id = Activity::create($this->db, $name, $description, $department, $sessions, $studentIds);
                     echo json_encode(['ok' => true, 'id' => $id]);
                     break;
                 case 'update_activity':
                     $id = intval($_POST['id'] ?? 0);
                     $name = trim($_POST['name'] ?? '');
                     $description = trim($_POST['description'] ?? '');
+                    $department = trim($_POST['department'] ?? 'Other');
                     $sessions = intval($_POST['sessions_per_week'] ?? 1);
                     $sids_str = $_POST['student_ids'] ?? '';
                     $studentIds = $sids_str ? array_map('intval', explode(',', $sids_str)) : [];
@@ -85,7 +89,7 @@ class ApiController {
                     if (!$id) { throw new Exception('ID required'); }
                     if ($name === '') { throw new Exception('Name required'); }
                     if ($sessions < 1 || $sessions > 7) { throw new Exception('sessions_per_week must be 1..7'); }
-                    Activity::update($this->db, $id, $name, $description, $sessions, $studentIds);
+                    Activity::update($this->db, $id, $name, $description, $department, $sessions, $studentIds);
                     echo json_encode(['ok' => true]);
                     break;
                 case 'delete_activity':
@@ -117,6 +121,16 @@ class ApiController {
                     $id = intval($_GET['id'] ?? 0);
                     if (!$id) throw new Exception('ID required');
                     echo json_encode(['data' => Attendance::getActivityExportData($this->db, $id)]);
+                    break;
+                case 'get_year_group_export':
+                    $yg = intval($_GET['year_group'] ?? 0);
+                    if (!$yg) throw new Exception('Year Group required');
+                    echo json_encode(['data' => Attendance::getYearGroupExportData($this->db, $yg)]);
+                    break;
+                case 'get_department_export':
+                    $dept = $_GET['department'] ?? '';
+                    if (!$dept) throw new Exception('Department required');
+                    echo json_encode(['data' => Attendance::getDepartmentExportData($this->db, $dept)]);
                     break;
                 case 'get_export_stats':
                     echo json_encode(['data' => Attendance::getExportData($this->db)]);

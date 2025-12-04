@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=0" />
     <title>Enrichment Activity Recorder</title>
-    <link rel="stylesheet" href="/assets/css/styles.css?v=1.0">
+    <link rel="stylesheet" href="/assets/css/styles.css?v=1.0.1">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -144,6 +144,34 @@
                         <tbody></tbody>
                     </table>
                 </div>
+
+                <div class="stats-table-container" style="margin-top: 24px;">
+                    <h3>Year Groups</h3>
+                    <table class="students-table" id="statsYearGroupsTable">
+                        <thead>
+                            <tr>
+                                <th>Year Group</th>
+                                <th>Total Attendance</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+
+                <div class="stats-table-container" style="margin-top: 24px;">
+                    <h3>Departments</h3>
+                    <table class="students-table" id="statsDepartmentsTable">
+                        <thead>
+                            <tr>
+                                <th>Department</th>
+                                <th>Total Attendance</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
             </div>
 
             <div id="settingsArea" class="settings-container" style="display:none; padding: 24px;">
@@ -206,6 +234,16 @@
                 <div class="form-group">
                     <label for="lastName">Last Name</label>
                     <input id="lastName" name="lastName" placeholder="e.g. Appleseed" required>
+                </div>
+                <div class="form-group">
+                    <label for="studentYearGroup">Year Group</label>
+                    <select id="studentYearGroup" name="yearGroup" required style="width:100%">
+                        <option value="9">Year 9</option>
+                        <option value="10">Year 10</option>
+                        <option value="11">Year 11</option>
+                        <option value="12">Year 12</option>
+                        <option value="13">Year 13</option>
+                    </select>
                     <div style="margin-top: 4px; font-size: 12px;">
                         <a href="#" id="uploadCsvLink" style="color: var(--accent); text-decoration: none;">Upload CSV instead</a>
                         <input type="file" id="csvUpload" accept=".csv, .txt" style="display: none;">
@@ -242,6 +280,18 @@
                 <div class="form-group">
                     <label for="activityDescriptionInput">Description</label>
                     <textarea id="activityDescriptionInput" name="description" placeholder="Optional description..." rows="3" style="width:100%; padding:8px 12px; font-size:14px; border:1px solid var(--border); border-radius:6px; background:var(--bg-app); color:var(--text-primary); resize:vertical; font-family:inherit;"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="activityDepartmentInput">Department</label>
+                    <select id="activityDepartmentInput" name="department" required style="width:100%">
+                        <option value="Computing">Computing</option>
+                        <option value="Health">Health</option>
+                        <option value="Sport">Sport</option>
+                        <option value="Science">Science</option>
+                        <option value="Maths">Maths</option>
+                        <option value="English">English</option>
+                        <option value="Other">Other</option>
+                    </select>
                 </div>
                 <div class="form-group">
                     <label for="activitySessions">Sessions per Week</label>
@@ -441,6 +491,6 @@
 
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/plugins/weekSelect/weekSelect.js"></script>
-<script src="/assets/js/app.js?v=1.0" defer></script>
+<script src="/assets/js/app.js?v=1.0.1" defer></script>
 </body>
 </html>
