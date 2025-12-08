@@ -55,7 +55,7 @@ class Database {
             id INT AUTO_INCREMENT PRIMARY KEY,
             name VARCHAR(255) NOT NULL,
             description TEXT,
-            department VARCHAR(50) DEFAULT 'Other',
+            department VARCHAR(255) DEFAULT 'Other',
             sessions_per_week INT NOT NULL DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB;");
@@ -68,7 +68,10 @@ class Database {
         // Migration: Check if department exists in activities
         $stmt = $db->query("SHOW COLUMNS FROM activities LIKE 'department'");
         if ($stmt->rowCount() === 0) {
-            $db->exec("ALTER TABLE activities ADD COLUMN department VARCHAR(50) DEFAULT 'Other' AFTER description");
+            $db->exec("ALTER TABLE activities ADD COLUMN department VARCHAR(255) DEFAULT 'Other' AFTER description");
+        } else {
+            // Migration: Ensure department is VARCHAR(255)
+            $db->exec("ALTER TABLE activities MODIFY COLUMN department VARCHAR(255) DEFAULT 'Other'");
         }
 
         $db->exec("CREATE TABLE IF NOT EXISTS attendance (

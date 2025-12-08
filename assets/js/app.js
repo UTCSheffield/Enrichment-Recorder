@@ -86,6 +86,7 @@
     const activityNameInput = q('#activityNameInput');
     const activityDescriptionInput = q('#activityDescriptionInput');
     const activityDepartmentInput = q('#activityDepartmentInput');
+    const departmentSelector = q('#departmentSelector');
     const activitySessionsInput = q('#activitySessions');
     const activityModalTitle = q('#activityModalTitle');
     const saveActivityBtn = q('#saveActivityBtn');
@@ -726,6 +727,56 @@
         }
     });
 
+    // Department Selector Logic
+    const departments = ['Computing', 'Health', 'Sport', 'Science', 'Maths', 'English', 'Other'];
+    let selectedDepartments = new Set(['Other']);
+
+    function renderDepartmentSelector() {
+        departmentSelector.innerHTML = '';
+        departments.forEach(dept => {
+            const chip = document.createElement('div');
+            chip.className = 'tag-chip';
+            chip.style.cursor = 'pointer';
+            chip.style.userSelect = 'none';
+            
+            const isSelected = selectedDepartments.has(dept);
+            if (isSelected) {
+                chip.style.background = 'var(--accent)';
+                chip.style.color = 'white';
+                chip.style.borderColor = 'var(--accent)';
+            } else {
+                chip.style.background = 'var(--bg-app)';
+                chip.style.color = 'var(--text-primary)';
+            }
+
+            chip.textContent = dept;
+            chip.onclick = () => toggleDepartment(dept);
+            departmentSelector.appendChild(chip);
+        });
+        activityDepartmentInput.value = Array.from(selectedDepartments).join(',');
+    }
+
+    function toggleDepartment(dept) {
+        if (dept === 'Other') {
+            selectedDepartments.clear();
+            selectedDepartments.add('Other');
+        } else {
+            if (selectedDepartments.has('Other')) {
+                selectedDepartments.delete('Other');
+            }
+            
+            if (selectedDepartments.has(dept)) {
+                selectedDepartments.delete(dept);
+                if (selectedDepartments.size === 0) {
+                    selectedDepartments.add('Other');
+                }
+            } else {
+                selectedDepartments.add(dept);
+            }
+        }
+        renderDepartmentSelector();
+    }
+
     function renderRegister() {
         if (!selectedActivity) {
             registerArea.innerHTML = '<div class="empty-state">Select an activity from the sidebar to view the register.</div>';
@@ -873,11 +924,14 @@
         activityIdInput.value = '';
         activityNameInput.value = '';
         activityDescriptionInput.value = '';
-        activityDepartmentInput.value = 'Other';
         activitySessionsInput.value = '1';
         activityModalTitle.textContent = 'New Activity';
         saveActivityBtn.textContent = 'Create Activity';
         deleteActivityBtn.style.display = 'none';
+
+        selectedDepartments.clear();
+        selectedDepartments.add('Other');
+        renderDepartmentSelector();
 
         currentActivityStudentIds = [];
         renderStudentTags();
@@ -893,11 +947,18 @@
         activityIdInput.value = act.id;
         activityNameInput.value = act.name;
         activityDescriptionInput.value = act.description || '';
-        activityDepartmentInput.value = act.department || 'Other';
         activitySessionsInput.value = act.sessions_per_week;
         activityModalTitle.textContent = 'Edit Activity';
         saveActivityBtn.textContent = 'Save Changes';
         deleteActivityBtn.style.display = 'block';
+
+        selectedDepartments.clear();
+        if (act.department) {
+            act.department.split(',').forEach(d => selectedDepartments.add(d.trim()));
+        } else {
+            selectedDepartments.add('Other');
+        }
+        renderDepartmentSelector();
 
         currentActivityStudentIds = [...(act.student_ids || [])];
         renderStudentTags();

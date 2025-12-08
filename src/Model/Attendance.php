@@ -59,7 +59,19 @@ class Attendance {
             WHERE att.present = 1 
             GROUP BY a.department
         ");
-        $departmentStats = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+        $rawDeptStats = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+        
+        // Process comma-separated departments
+        $departmentStats = [];
+        foreach ($rawDeptStats as $depts => $count) {
+            $list = explode(',', $depts);
+            foreach ($list as $d) {
+                $d = trim($d);
+                if (!$d) continue;
+                if (!isset($departmentStats[$d])) $departmentStats[$d] = 0;
+                $departmentStats[$d] += $count;
+            }
+        }
 
         // Attendance over time (by week)
         $stmt = $db->query("SELECT week_start, COUNT(*) as count FROM attendance WHERE present = 1 GROUP BY week_start ORDER BY week_start");
@@ -180,7 +192,7 @@ class Attendance {
             FROM attendance att
             JOIN students s ON att.student_id = s.id
             JOIN activities a ON att.activity_id = a.id
-            WHERE a.department = :dept AND att.present = 1
+            WHERE FIND_IN_SET(:dept, a.department) > 0 AND att.present = 1
             GROUP BY s.name, att.week_start
             ORDER BY s.name, att.week_start
         ";

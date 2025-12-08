@@ -282,16 +282,11 @@
                     <textarea id="activityDescriptionInput" name="description" placeholder="Optional description..." rows="3" style="width:100%; padding:8px 12px; font-size:14px; border:1px solid var(--border); border-radius:6px; background:var(--bg-app); color:var(--text-primary); resize:vertical; font-family:inherit;"></textarea>
                 </div>
                 <div class="form-group">
-                    <label for="activityDepartmentInput">Department</label>
-                    <select id="activityDepartmentInput" name="department" required style="width:100%">
-                        <option value="Computing">Computing</option>
-                        <option value="Health">Health</option>
-                        <option value="Sport">Sport</option>
-                        <option value="Science">Science</option>
-                        <option value="Maths">Maths</option>
-                        <option value="English">English</option>
-                        <option value="Other">Other</option>
-                    </select>
+                    <label>Departments</label>
+                    <div id="departmentSelector" class="tags-input-container" style="padding: 8px; gap: 8px;">
+                        <!-- Will be populated by JS -->
+                    </div>
+                    <input type="hidden" id="activityDepartmentInput" name="department">
                 </div>
                 <div class="form-group">
                     <label for="activitySessions">Sessions per Week</label>
@@ -491,6 +486,6 @@
 
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/plugins/weekSelect/weekSelect.js"></script>
-<script src="/assets/js/app.js?v=1.0.1" defer></script>
+<script src="/assets/js/app.js?v=1.1.0" defer></script>
 </body>
 </html>
