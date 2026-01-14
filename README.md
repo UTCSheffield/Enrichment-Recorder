@@ -30,6 +30,8 @@ When you open the site, you’ll be prompted for a password. The password you en
 - **Head of Subject** (`HEAD_OF_SUBJECT_PASSWORD`): can create/edit activities, assign students to activities, and mark attendance.
 - **Teacher** (`TEACHER_PASSWORD`): can mark attendance and assign students to existing activities.
 
+These shared passwords are configured in `.env`.
+
 ## Run with Docker
 This setup runs the application with Apache/PHP and a MySQL database.
 
@@ -41,8 +43,6 @@ This setup runs the application with Apache/PHP and a MySQL database.
    ```
 
    and buddy, for the life of you, change the default password.
-
-These shared passwords are configured in `.env` / `.env.example`.
 
 3. Run the following command in the project root:
 
