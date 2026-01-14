@@ -23,6 +23,13 @@ Below are example screenshots of the application in action:
 ### Settings page
 ![Settings page](assets/screenshots/settings-page.png)
 
+## Password Roles
+When you open the site, you’ll be prompted for a password. The password you enter determines your role:
+
+- **Admin** (`ADMIN_PASSWORD`): full access (Statistics + Settings + student management).
+- **Head of Subject** (`HEAD_OF_SUBJECT_PASSWORD`): can create/edit activities, assign students to activities, and mark attendance.
+- **Teacher** (`TEACHER_PASSWORD`): can mark attendance and assign students to existing activities.
+
 ## Run with Docker
 This setup runs the application with Apache/PHP and a MySQL database.
 
@@ -34,13 +41,6 @@ This setup runs the application with Apache/PHP and a MySQL database.
    ```
 
    and buddy, for the life of you, change the default password.
-
-## Password Roles
-When you open the site, you’ll be prompted for a password. The password you enter determines your role:
-
-- **Admin** (`ADMIN_PASSWORD`): full access (Statistics + Settings + student management).
-- **Head of Subject** (`HEAD_OF_SUBJECT_PASSWORD`): can create/edit activities, assign students to activities, and mark attendance.
-- **Teacher** (`TEACHER_PASSWORD`): can mark attendance and assign students to existing activities.
 
 These shared passwords are configured in `.env` / `.env.example`.
 
