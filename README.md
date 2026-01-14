@@ -35,10 +35,21 @@ This setup runs the application with Apache/PHP and a MySQL database.
 
    and buddy, for the life of you, change the default password.
 
+## Password Roles
+When you open the site, you’ll be prompted for a password. The password you enter determines your role:
+
+- **Admin** (`ADMIN_PASSWORD`): full access (Statistics + Settings + student management).
+- **Head of Subject** (`HEAD_OF_SUBJECT_PASSWORD`): can create/edit activities, assign students to activities, and mark attendance.
+- **Teacher** (`TEACHER_PASSWORD`): can mark attendance and assign students to existing activities.
+
+These shared passwords are configured in `.env` / `.env.example`.
+
 3. Run the following command in the project root:
 
 ```bash
 docker compose up --build
 ```
 
-4. Open `http://localhost:8080` (or the port defined in your `.env` file) in your browser.
+4. Make sure that you reset the details in the .env for password and encryption key.
+
+5. Open `http://localhost:8080` (or the port defined in your `.env` file) in your browser

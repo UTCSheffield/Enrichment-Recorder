@@ -1,5 +1,12 @@
 (() => {
     const q = sel => document.querySelector(sel); // Shorted code since it's used a million times
+    const role = (window.__ER_ROLE__ || 'teacher');
+    const can = {
+        admin: role === 'admin',
+        head: role === 'admin' || role === 'head',
+        teacher: role === 'admin' || role === 'head' || role === 'teacher',
+    };
+
     const api = async (action, method = 'GET', body = null) => {
         const opts = { method, headers: {} };
         let url = `/?action=${encodeURIComponent(action)}`;
@@ -11,7 +18,16 @@
             opts.body = new URLSearchParams(body || {});
         }
         const res = await fetch(url, opts);
-        return res.json();
+        if (res.status === 401) {
+            // Cookie expired/cleared
+            window.location.href = '/';
+            return { error: 'Unauthorized' };
+        }
+        const data = await res.json();
+        if (res.status === 403 && !data?.error) {
+            data.error = 'Not allowed';
+        }
+        return data;
     };
 
     // state
@@ -34,6 +50,25 @@
     const activityDescription = q('#activityDescription');
     const editActivityBtn = q('#editActivityBtn');
     const toggleThemeBtn = q('#toggleTheme');
+
+    function applyRoleGating() {
+        // Admin-only sections
+        if (!can.admin) {
+            if (navStats) navStats.style.display = 'none';
+            if (navSettings) navSettings.style.display = 'none';
+        }
+
+        // Head/Admin: can create/edit activities. Teachers cannot.
+        if (!can.head) {
+            if (addActivityBtn) addActivityBtn.style.display = 'none';
+            if (editActivityBtn) editActivityBtn.style.display = 'none';
+        }
+
+        // Admin: student CRUD in settings
+        if (!can.admin) {
+            if (createStudentBtn) createStudentBtn.style.display = 'none';
+        }
+    }
 
     // Stats Elements
     const statTotalStudents = q('#statTotalStudents');
@@ -150,11 +185,7 @@
         const act = state.activities.find(x => x.id == id);
         activityTitle.textContent = act ? act.name : 'Register';
         activityDescription.textContent = act ? (act.description || '') : '';
-        if (act) {
-            editActivityBtn.style.display = 'flex';
-        } else {
-            editActivityBtn.style.display = 'none';
-        }
+        editActivityBtn.style.display = (act && can.head) ? 'flex' : 'none';
         await loadAttendance();
     }
 
@@ -464,7 +495,7 @@
         selectedCountText.textContent = `${count} student${count !== 1 ? 's' : ''} selected`;
     }
 
-    navSettings.addEventListener('click', loadSettings);
+    if (can.admin) navSettings.addEventListener('click', loadSettings);
 
     selectAllStudents.addEventListener('change', (e) => {
         if (e.target.checked) {
@@ -560,7 +591,7 @@
         alert(`Added students to ${activity.name}`);
     });
 
-    navStats.addEventListener('click', loadStats);
+    if (can.admin) navStats.addEventListener('click', loadStats);
     statsSearch.addEventListener('input', (e) => renderStatsTable(e.target.value));
 
     // Helper for CSV dates (YYYY-MM-DD -> DD-MM-YY)
@@ -894,7 +925,7 @@
         } else alert(res.error || 'Failed');
     });
 
-    deleteActivityBtn.addEventListener('click', async () => {
+    if (can.admin) deleteActivityBtn.addEventListener('click', async () => {
         const id = activityIdInput.value;
         if (!id) return;
         if (!confirm('Are you sure you want to delete this activity? All attendance data will be lost.')) return;
@@ -921,6 +952,7 @@
     }
 
     function openCreateActivityModal() {
+        if (!can.head) return;
         activityIdInput.value = '';
         activityNameInput.value = '';
         activityDescriptionInput.value = '';
@@ -940,6 +972,7 @@
     }
 
     function openEditActivityModal() {
+        if (!can.head) return;
         if (!selectedActivity) return;
         const act = state.activities.find(x => x.id == selectedActivity);
         if (!act) return;
@@ -950,7 +983,7 @@
         activitySessionsInput.value = act.sessions_per_week;
         activityModalTitle.textContent = 'Edit Activity';
         saveActivityBtn.textContent = 'Save Changes';
-        deleteActivityBtn.style.display = 'block';
+        deleteActivityBtn.style.display = can.admin ? 'block' : 'none';
 
         selectedDepartments.clear();
         if (act.department) {
@@ -979,6 +1012,7 @@
     }
 
     function openCreateStudentModal() {
+        if (!can.admin) return;
         studentIdInput.value = '';
         firstNameInput.value = '';
         lastNameInput.value = '';
@@ -990,6 +1024,7 @@
     }
 
     function openEditStudentModal(student) {
+        if (!can.admin) return;
         studentIdInput.value = student.id;
         const parts = student.name.split(' ');
         firstNameInput.value = parts[0] || '';
@@ -1033,9 +1068,9 @@
         }
     });
 
-    createStudentBtn.addEventListener('click', openCreateStudentModal);
-    if (addActivityBtn) addActivityBtn.addEventListener('click', openCreateActivityModal);
-    if (editActivityBtn) editActivityBtn.addEventListener('click', openEditActivityModal);
+    if (can.admin) createStudentBtn.addEventListener('click', openCreateStudentModal);
+    if (can.head && addActivityBtn) addActivityBtn.addEventListener('click', openCreateActivityModal);
+    if (can.head && editActivityBtn) editActivityBtn.addEventListener('click', openEditActivityModal);
 
     closeModalBtns.forEach(btn => btn.addEventListener('click', (e) => {
         const modal = e.target.closest('.modal-overlay');
@@ -1567,6 +1602,7 @@
     // init
     (async function () {
         loadTheme();
+        applyRoleGating();
         selectedWeekStart = isoMonday();
         weekStartInput.value = selectedWeekStart;
         await loadState();

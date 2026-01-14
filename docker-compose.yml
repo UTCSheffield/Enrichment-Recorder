@@ -9,11 +9,16 @@ services:
       - DB_USER=${DB_USER:-user}
       - DB_PASS=${DB_PASS:-userpassword}
       - PORT=${PORT:-8080}
+      - AUTH_SECRET=${AUTH_SECRET:-dev-change-me-please}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
+      - HEAD_OF_SUBJECT_PASSWORD=${HEAD_OF_SUBJECT_PASSWORD:-head123}
+      - TEACHER_PASSWORD=${TEACHER_PASSWORD:-teacher123}
     depends_on:
       - db
 
   db:
     image: mysql:8.0
+    command: --default-authentication-plugin=mysql_native_password
     environment:
       - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-rootpassword}
       - MYSQL_DATABASE=${DB_NAME:-enrichment_db}

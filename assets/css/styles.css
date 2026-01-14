@@ -42,6 +42,99 @@ body {
     transition: background 0.3s ease, color 0.3s ease;
 }
 
+/* Role Badge */
+.role-badge {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    background: var(--bg-app);
+    white-space: nowrap;
+}
+
+/* Auth Page */
+.auth-page {
+    height: 100vh;
+    width: 100vw;
+    display: flex;
+    flex-direction: column;
+    background:
+        radial-gradient(1200px 600px at 10% -10%, rgba(0, 122, 255, 0.18), transparent 60%),
+        radial-gradient(900px 500px at 90% 0%, rgba(52, 199, 89, 0.14), transparent 55%),
+        var(--bg-app);
+}
+
+.auth-topbar {
+    height: 64px;
+    padding: 0 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.auth-shell {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+}
+
+.auth-card {
+    width: 100%;
+    max-width: 420px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--bg-content);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+    padding: 18px;
+}
+
+.auth-card-header h1 {
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.2px;
+}
+
+.auth-card-header p {
+    margin-top: 6px;
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+.auth-form {
+    margin-top: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.auth-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.auth-alert {
+    margin-top: 12px;
+    border: 1px solid rgba(255, 59, 48, 0.35);
+    background: rgba(255, 59, 48, 0.10);
+    color: var(--text-primary);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 13px;
+}
+
+.auth-footnote {
+    margin-top: 12px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    text-align: center;
+}
+
 /* Layout */
 .app-root {
     display: flex;
