@@ -552,6 +552,41 @@ kbd {
     width: 100%;
     padding: 8px 12px;
     font-size: 14px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg-app);
+    color: var(--text-primary);
+}
+
+.form-group textarea {
+    width: 100%;
+    padding: 8px 12px;
+    font-size: 14px;
+    resize: vertical;
+    min-height: 80px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg-app);
+    color: var(--text-primary);
+    font-family: inherit;
+}
+
+.form-group select {
+    width: 100%;
+    padding: 8px 12px;
+    font-size: 14px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg-app);
+    color: var(--text-primary);
+}
+
+input[type="checkbox"] {
+    accent-color: var(--accent);
+}
+
+.activity-only {
+    display: none;
 }
 
 .modal-footer {

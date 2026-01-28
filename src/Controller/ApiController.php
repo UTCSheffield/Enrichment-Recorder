@@ -50,7 +50,24 @@ class ApiController {
                     echo json_encode(['ok' => true, 'id' => $id]);
                     break;
                 case 'update_student':
-                    Auth::requireRole(['admin']);
+                    if ($role === 'admin') {
+                        // Admin can update any student
+                    } elseif ($role === 'head' || $role === 'teacher') {
+                        // Head/Teacher can only update students assigned to the provided activity
+                        $activityId = intval($_POST['activity_id'] ?? 0);
+                        if (!$activityId) { throw new Exception('activity_id required'); }
+                        $studentId = intval($_POST['id'] ?? 0);
+                        if (!$studentId) { throw new Exception('ID required'); }
+                        $chk = $this->db->prepare('SELECT 1 FROM activity_students WHERE activity_id = :aid AND student_id = :sid');
+                        $chk->execute([':aid' => $activityId, ':sid' => $studentId]);
+                        if (!$chk->fetchColumn()) {
+                            http_response_code(403);
+                            echo json_encode(['error' => 'Not allowed']);
+                            return;
+                        }
+                    } else {
+                        Auth::requireRole(['admin']);
+                    }
                     $id = intval($_POST['id'] ?? 0);
                     $name = trim($_POST['name'] ?? '');
                     $yearGroup = intval($_POST['year_group'] ?? 9);
@@ -83,24 +100,29 @@ class ApiController {
                     $description = trim($_POST['description'] ?? '');
                     $department = trim($_POST['department'] ?? 'Other');
                     $sessions = intval($_POST['sessions_per_week'] ?? 1);
+                    $hasMandatory = intval($_POST['has_mandatory'] ?? 1) ? 1 : 0;
                     $sids_str = $_POST['student_ids'] ?? '';
                     $studentIds = $sids_str ? array_map('intval', explode(',', $sids_str)) : [];
                     
                     if ($name === '') { throw new Exception('Name required'); }
                     if ($sessions < 1 || $sessions > 7) { throw new Exception('sessions_per_week must be 1..7'); }
+                    // Activity::create defaults has_mandatory to 1 for backward compatibility.
                     $id = Activity::create($this->db, $name, $description, $department, $sessions, $studentIds);
+                    $stmt = $this->db->prepare('UPDATE activities SET has_mandatory = :hm WHERE id = :id');
+                    $stmt->execute([':hm' => $hasMandatory, ':id' => $id]);
                     echo json_encode(['ok' => true, 'id' => $id]);
                     break;
                 case 'update_activity':
                     $id = intval($_POST['id'] ?? 0);
                     $sids_str = $_POST['student_ids'] ?? '';
                     $studentIds = $sids_str ? array_map('intval', explode(',', $sids_str)) : [];
+                    $hasMandatory = intval($_POST['has_mandatory'] ?? 0) ? 1 : 0;
 
                     if (!$id) { throw new Exception('ID required'); }
 
                     if ($role === 'teacher') {
                         // Teachers can only assign students to an existing activity
-                        $stmt = $this->db->prepare('SELECT name, description, department, sessions_per_week FROM activities WHERE id = :id');
+                        $stmt = $this->db->prepare('SELECT name, description, department, sessions_per_week, has_mandatory FROM activities WHERE id = :id');
                         $stmt->execute([':id' => $id]);
                         $existing = $stmt->fetch();
                         if (!$existing) { throw new Exception('Activity not found'); }
@@ -111,17 +133,34 @@ class ApiController {
                             (string)($existing['description'] ?? ''),
                             (string)($existing['department'] ?? 'Other'),
                             (int)($existing['sessions_per_week'] ?? 1),
+                            (int)($existing['has_mandatory'] ?? 1),
                             $studentIds
                         );
                     } else {
                         Auth::requireRole(['admin', 'head']);
                         $name = trim($_POST['name'] ?? '');
                         $description = trim($_POST['description'] ?? '');
-                        $department = trim($_POST['department'] ?? 'Other');
+                        $department = trim($_POST['department'] ?? '');
                         $sessions = intval($_POST['sessions_per_week'] ?? 1);
                         if ($name === '') { throw new Exception('Name required'); }
                         if ($sessions < 1 || $sessions > 7) { throw new Exception('sessions_per_week must be 1..7'); }
-                        Activity::update($this->db, $id, $name, $description, $department, $sessions, $studentIds);
+
+                        // Preserve existing values if optional params are omitted
+                        if ($department === '' || !isset($_POST['has_mandatory'])) {
+                            $stmt = $this->db->prepare('SELECT department, has_mandatory FROM activities WHERE id = :id');
+                            $stmt->execute([':id' => $id]);
+                            $existing = $stmt->fetch();
+                            if ($existing) {
+                                if ($department === '') {
+                                    $department = (string)($existing['department'] ?? 'Other');
+                                }
+                                if (!isset($_POST['has_mandatory'])) {
+                                    $hasMandatory = (int)($existing['has_mandatory'] ?? 1);
+                                }
+                            }
+                        }
+
+                        Activity::update($this->db, $id, $name, $description, $department, $sessions, $hasMandatory, $studentIds);
                     }
                     echo json_encode(['ok' => true]);
                     break;
@@ -184,7 +223,43 @@ class ApiController {
                     $session_index = intval($_POST['session_index'] ?? 1);
                     $present = intval($_POST['present'] ?? 0) ? 1 : 0;
                     if (!$student_id || !$activity_id || !$week_start) throw new Exception('Missing params');
+
+                    // Enforce that the student is assigned to the activity
+                    $chk = $this->db->prepare('SELECT 1 FROM activity_students WHERE activity_id = :aid AND student_id = :sid');
+                    $chk->execute([':aid' => $activity_id, ':sid' => $student_id]);
+                    if (!$chk->fetchColumn()) {
+                        http_response_code(403);
+                        echo json_encode(['error' => 'Student not assigned to activity']);
+                        return;
+                    }
                     Attendance::toggle($this->db, $student_id, $activity_id, $week_start, $session_index, $present);
+                    echo json_encode(['ok' => true]);
+                    break;
+
+                case 'update_activity_student':
+                    Auth::requireRole(['admin', 'head', 'teacher']);
+                    $activityId = intval($_POST['activity_id'] ?? 0);
+                    $studentId = intval($_POST['student_id'] ?? 0);
+                    $mandatory = intval($_POST['mandatory'] ?? 0) ? 1 : 0;
+                    $note = (string)($_POST['note'] ?? '');
+                    if (!$activityId || !$studentId) { throw new Exception('Missing params'); }
+
+                    $chk = $this->db->prepare('SELECT 1 FROM activity_students WHERE activity_id = :aid AND student_id = :sid');
+                    $chk->execute([':aid' => $activityId, ':sid' => $studentId]);
+                    if (!$chk->fetchColumn()) {
+                        http_response_code(403);
+                        echo json_encode(['error' => 'Student not assigned to activity']);
+                        return;
+                    }
+
+                    $stmt = $this->db->prepare('UPDATE activity_students SET mandatory = :mandatory, note = :note WHERE activity_id = :aid AND student_id = :sid');
+                    $stmt->execute([
+                        ':mandatory' => $mandatory,
+                        ':note' => $note,
+                        ':aid' => $activityId,
+                        ':sid' => $studentId,
+                    ]);
+
                     echo json_encode(['ok' => true]);
                     break;
                 case 'save_setting':

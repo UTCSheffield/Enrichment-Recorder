@@ -36,6 +36,8 @@
     let selectedWeekStart = null;
     let focusedRow = 0;
     let selectedStudentIds = new Set();
+    let currentRegisterStudents = [];
+    let currentRegisterHasMandatory = true;
 
     // UI elements
     const activitiesList = q('#activitiesList');
@@ -108,9 +110,13 @@
     const studentModal = q('#studentModal');
     const studentForm = q('#studentForm');
     const studentIdInput = q('#studentIdInput');
+    const studentActivityIdInput = q('#studentActivityIdInput');
+    const studentEditContextInput = q('#studentEditContextInput');
     const firstNameInput = q('#firstName');
     const lastNameInput = q('#lastName');
     const studentYearGroup = q('#studentYearGroup');
+    const studentMandatoryInput = q('#studentMandatory');
+    const studentNoteInput = q('#studentNote');
     const studentModalTitle = q('#studentModalTitle');
     const saveStudentBtn = q('#saveStudentBtn');
     const deleteStudentBtn = q('#deleteStudentBtn');
@@ -123,6 +129,7 @@
     const activityDepartmentInput = q('#activityDepartmentInput');
     const departmentSelector = q('#departmentSelector');
     const activitySessionsInput = q('#activitySessions');
+    const activityHasMandatoryInput = q('#activityHasMandatory');
     const activityModalTitle = q('#activityModalTitle');
     const saveActivityBtn = q('#saveActivityBtn');
     const deleteActivityBtn = q('#deleteActivityBtn');
@@ -815,6 +822,8 @@
         }
         const act = state.activities.find(x => x.id == selectedActivity);
         const sessions = act.sessions_per_week;
+        const showMandatory = (act.has_mandatory === undefined) ? true : !!parseInt(act.has_mandatory, 10);
+        currentRegisterHasMandatory = showMandatory;
 
         // Filter students based on activity association
         // If student_ids is undefined (legacy), show all? Or show none?
@@ -826,17 +835,23 @@
         // Sort by name
         activityStudents.sort((a, b) => a.name.localeCompare(b.name));
 
+        currentRegisterStudents = activityStudents;
+        if (focusedRow >= currentRegisterStudents.length) {
+            focusedRow = Math.max(0, currentRegisterStudents.length - 1);
+        }
+
         const table = document.createElement('table');
         table.className = 'students-table';
         const thead = document.createElement('thead');
         const headRow = document.createElement('tr');
-        headRow.innerHTML = `<th>Student</th>` + Array.from({ length: sessions }).map((_, i) => `<th>Session ${i + 1}</th>`).join('');
+        headRow.innerHTML = `<th>Student</th>` + (showMandatory ? `<th>Mandatory</th>` : ``) + Array.from({ length: sessions }).map((_, i) => `<th>Session ${i + 1}</th>`).join('');
         thead.appendChild(headRow); table.appendChild(thead);
         const tbody = document.createElement('tbody');
 
         if (activityStudents.length === 0) {
             const tr = document.createElement('tr');
-            tr.innerHTML = `<td colspan="${sessions + 1}" style="text-align:center; color:var(--text-secondary); padding: 20px;">No students assigned to this activity. Edit activity to add students.</td>`;
+            const cols = 1 + sessions + (showMandatory ? 1 : 0);
+            tr.innerHTML = `<td colspan="${cols}" style="text-align:center; color:var(--text-secondary); padding: 20px;">No students assigned to this activity. Edit activity to add students.</td>`;
             tbody.appendChild(tr);
         }
 
@@ -861,13 +876,32 @@
             editBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>';
             editBtn.style.opacity = '0.5';
             editBtn.style.padding = '4px';
-            editBtn.onclick = (e) => { e.stopPropagation(); openEditStudentModal(s); };
+            editBtn.onclick = (e) => { e.stopPropagation(); openEditStudentModal(s, { context: 'activity' }); };
             editBtn.onmouseover = () => editBtn.style.opacity = '1';
             editBtn.onmouseout = () => editBtn.style.opacity = '0.5';
 
             wrapper.appendChild(editBtn);
             nameTd.appendChild(wrapper);
             tr.appendChild(nameTd);
+            const meta = (act.student_meta && act.student_meta[String(s.id)]) ? act.student_meta[String(s.id)] : null;
+
+            if (showMandatory) {
+                // Mandatory (per activity)
+                const mandatoryTd = document.createElement('td');
+                const mandatoryCb = document.createElement('input');
+                mandatoryCb.type = 'checkbox';
+                mandatoryCb.checked = !!(meta && meta.mandatory);
+                mandatoryCb.addEventListener('change', async () => {
+                    const existingNote = (meta && typeof meta.note === 'string') ? meta.note : '';
+                    const ok = await updateActivityStudentMeta(selectedActivity, s.id, { mandatory: mandatoryCb.checked ? 1 : 0, note: existingNote });
+                    if (!ok) {
+                        // revert
+                        mandatoryCb.checked = !mandatoryCb.checked;
+                    }
+                });
+                mandatoryTd.appendChild(mandatoryCb);
+                tr.appendChild(mandatoryTd);
+            }
 
             for (let si = 1; si <= sessions; si++) {
                 const td = document.createElement('td');
@@ -892,6 +926,25 @@
         state.attendance[student_id][session_index] = present ? 1 : 0;
     }
 
+    async function updateActivityStudentMeta(activity_id, student_id, { mandatory, note }) {
+        const res = await api('update_activity_student', 'POST', {
+            activity_id,
+            student_id,
+            mandatory: mandatory ? 1 : 0,
+            note: note ?? ''
+        });
+        if (res && res.ok) {
+            const act = state.activities.find(x => x.id == activity_id);
+            if (act) {
+                if (!act.student_meta) act.student_meta = {};
+                act.student_meta[String(student_id)] = { mandatory: mandatory ? 1 : 0, note: note ?? '' };
+            }
+            return true;
+        }
+        alert(res.error || 'Failed to update');
+        return false;
+    }
+
     activityForm.addEventListener('submit', async e => {
         e.preventDefault();
         const id = activityIdInput.value;
@@ -899,6 +952,7 @@
         const description = activityDescriptionInput.value.trim();
         const department = activityDepartmentInput.value;
         const sessions = activitySessionsInput.value;
+        const has_mandatory = activityHasMandatoryInput && activityHasMandatoryInput.checked ? 1 : 0;
 
         if (!name) return;
 
@@ -908,10 +962,10 @@
         let res;
         if (id) {
             // Update
-            res = await api('update_activity', 'POST', { id, name, description, department, sessions_per_week: sessions, student_ids: studentIdsStr });
+            res = await api('update_activity', 'POST', { id, name, description, department, sessions_per_week: sessions, has_mandatory, student_ids: studentIdsStr });
         } else {
             // Create
-            res = await api('create_activity', 'POST', { name, description, department, sessions_per_week: sessions, student_ids: studentIdsStr });
+            res = await api('create_activity', 'POST', { name, description, department, sessions_per_week: sessions, has_mandatory, student_ids: studentIdsStr });
         }
 
         if (res.ok) {
@@ -957,6 +1011,7 @@
         activityNameInput.value = '';
         activityDescriptionInput.value = '';
         activitySessionsInput.value = '1';
+        if (activityHasMandatoryInput) activityHasMandatoryInput.checked = true;
         activityModalTitle.textContent = 'New Activity';
         saveActivityBtn.textContent = 'Create Activity';
         deleteActivityBtn.style.display = 'none';
@@ -981,6 +1036,7 @@
         activityNameInput.value = act.name;
         activityDescriptionInput.value = act.description || '';
         activitySessionsInput.value = act.sessions_per_week;
+        if (activityHasMandatoryInput) activityHasMandatoryInput.checked = (act.has_mandatory === undefined) ? true : !!parseInt(act.has_mandatory, 10);
         activityModalTitle.textContent = 'Edit Activity';
         saveActivityBtn.textContent = 'Save Changes';
         deleteActivityBtn.style.display = can.admin ? 'block' : 'none';
@@ -1014,25 +1070,63 @@
     function openCreateStudentModal() {
         if (!can.admin) return;
         studentIdInput.value = '';
+        if (studentActivityIdInput) studentActivityIdInput.value = '';
+        if (studentEditContextInput) studentEditContextInput.value = 'global';
         firstNameInput.value = '';
         lastNameInput.value = '';
         studentYearGroup.value = '9';
+        if (studentMandatoryInput) studentMandatoryInput.checked = false;
+        if (studentNoteInput) studentNoteInput.value = '';
         studentModalTitle.textContent = 'Add New Student';
         saveStudentBtn.textContent = 'Add Student';
         deleteStudentBtn.style.display = 'none';
+
+        document.querySelectorAll('.activity-only').forEach(el => el.style.display = 'none');
+        document.querySelectorAll('.activity-mandatory').forEach(el => el.style.display = 'none');
         openModal(studentModal);
     }
 
-    function openEditStudentModal(student) {
-        if (!can.admin) return;
+    function openEditStudentModal(student, opts = {}) {
+        const context = opts.context || 'global';
+        const isActivityContext = context === 'activity' && !!selectedActivity;
+
+        // Only admins can edit students globally (via Settings).
+        // Teachers/Heads can edit assigned students from the activity page.
+        if (!can.admin && !isActivityContext) return;
+
         studentIdInput.value = student.id;
+        if (studentActivityIdInput) studentActivityIdInput.value = isActivityContext ? String(selectedActivity) : '';
+        if (studentEditContextInput) studentEditContextInput.value = isActivityContext ? 'activity' : 'global';
+
         const parts = student.name.split(' ');
         firstNameInput.value = parts[0] || '';
         lastNameInput.value = parts.slice(1).join(' ') || '';
         studentYearGroup.value = student.year_group || '9';
-        studentModalTitle.textContent = 'Edit Student';
+
+        if (isActivityContext) {
+            const act = state.activities.find(x => x.id == selectedActivity);
+            const meta = (act && act.student_meta && act.student_meta[String(student.id)]) ? act.student_meta[String(student.id)] : null;
+            if (studentMandatoryInput) studentMandatoryInput.checked = !!(meta && meta.mandatory);
+            if (studentNoteInput) studentNoteInput.value = (meta && typeof meta.note === 'string') ? meta.note : '';
+
+            const showMandatory = (act && act.has_mandatory === undefined) ? true : !!parseInt(act.has_mandatory, 10);
+            document.querySelectorAll('.activity-mandatory').forEach(el => el.style.display = showMandatory ? 'flex' : 'none');
+        } else {
+            if (studentMandatoryInput) studentMandatoryInput.checked = false;
+            if (studentNoteInput) studentNoteInput.value = '';
+        }
+
+        document.querySelectorAll('.activity-only').forEach(el => el.style.display = isActivityContext ? 'flex' : 'none');
+
+        // Allow teacher/head to edit student record only when invoked from an activity.
+        const canEditStudentRecord = can.admin || (isActivityContext && (role === 'teacher' || role === 'head'));
+        firstNameInput.disabled = !canEditStudentRecord;
+        lastNameInput.disabled = !canEditStudentRecord;
+        studentYearGroup.disabled = !canEditStudentRecord;
+
+        studentModalTitle.textContent = isActivityContext ? 'Edit Student (This Activity)' : 'Edit Student';
         saveStudentBtn.textContent = 'Save Changes';
-        deleteStudentBtn.style.display = 'block';
+        deleteStudentBtn.style.display = (can.admin && !isActivityContext) ? 'block' : 'none';
         openModal(studentModal);
     }
 
@@ -1051,11 +1145,15 @@
         const act = state.activities.find(x => x.id == selectedActivity);
         if (!act) return;
 
+        const hasMandatory = (act.has_mandatory === undefined) ? 1 : (parseInt(act.has_mandatory, 10) ? 1 : 0);
+
         const res = await api('update_activity', 'POST', {
             id: act.id,
             name: act.name,
             description: act.description || '',
+            department: act.department || 'Other',
             sessions_per_week: act.sessions_per_week,
+            has_mandatory: hasMandatory,
             student_ids: assignStudentIds.join(',')
         });
 
@@ -1400,9 +1498,22 @@
 
         const fullName = `${first} ${last}`;
 
+        const editContext = studentEditContextInput ? studentEditContextInput.value : 'global';
+        const activityId = studentActivityIdInput ? parseInt(studentActivityIdInput.value || '0', 10) : 0;
+
+        // If editing from an activity, always save per-activity metadata.
+        if (editContext === 'activity' && id && activityId) {
+            const mandatory = studentMandatoryInput && studentMandatoryInput.checked ? 1 : 0;
+            const note = studentNoteInput ? studentNoteInput.value : '';
+            const ok = await updateActivityStudentMeta(activityId, parseInt(id, 10), { mandatory, note });
+            if (!ok) return;
+        }
+
         let res;
         if (id) {
-            res = await api('update_student', 'POST', { id, name: fullName, year_group: yearGroup });
+            const payload = { id, name: fullName, year_group: yearGroup };
+            if (!can.admin && activityId) payload.activity_id = activityId;
+            res = await api('update_student', 'POST', payload);
         } else {
             res = await api('create_student', 'POST', { name: fullName, year_group: yearGroup });
         }
@@ -1486,13 +1597,31 @@
             e.preventDefault();
         }
         if (e.key === 'ArrowUp') { focusedRow = Math.max(0, focusedRow - 1); renderRegister(); }
-        if (e.key === 'ArrowDown') { focusedRow = Math.min(state.students.length - 1, focusedRow + 1); renderRegister(); }
-        if (e.key === ' ') { // toggle session 1
-            const s = state.students[focusedRow]; if (!s) return; const cb = document.querySelectorAll('.students-table tbody tr')[focusedRow].querySelector('input'); if (cb) { cb.checked = !cb.checked; cb.dispatchEvent(new Event('change')); }
+        if (e.key === 'ArrowDown') { focusedRow = Math.min(currentRegisterStudents.length - 1, focusedRow + 1); renderRegister(); }
+        if (e.key === ' ') { // toggle session 1 (skip mandatory column)
+            const s = currentRegisterStudents[focusedRow];
+            if (!s) return;
+            const row = document.querySelectorAll('.students-table tbody tr')[focusedRow];
+            if (!row) return;
+            const inputs = row.querySelectorAll('input');
+            const offset = currentRegisterHasMandatory ? 1 : 0;
+            const cb = inputs[offset];
+            if (cb) { cb.checked = !cb.checked; cb.dispatchEvent(new Event('change')); }
         }
         if (/^[1-7]$/.test(e.key)) {
             const si = parseInt(e.key, 10);
-            const s = state.students[focusedRow]; if (!s) return; const row = document.querySelectorAll('.students-table tbody tr')[focusedRow]; const inputs = row.querySelectorAll('input'); if (si - 1 < inputs.length) { const cb = inputs[si - 1]; cb.checked = !cb.checked; cb.dispatchEvent(new Event('change')); }
+            const s = currentRegisterStudents[focusedRow];
+            if (!s) return;
+            const row = document.querySelectorAll('.students-table tbody tr')[focusedRow];
+            if (!row) return;
+            const inputs = row.querySelectorAll('input');
+            const offset = currentRegisterHasMandatory ? 1 : 0;
+            const idx = offset + (si - 1);
+            if (idx < inputs.length) {
+                const cb = inputs[idx];
+                cb.checked = !cb.checked;
+                cb.dispatchEvent(new Event('change'));
+            }
         }
     });
 

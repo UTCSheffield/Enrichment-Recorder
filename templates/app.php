@@ -239,6 +239,8 @@ if ($role === 'head') $roleLabel = 'Head of Subject';
         </div>
         <form id="studentForm" autocomplete="off">
             <input type="hidden" id="studentIdInput" name="id">
+            <input type="hidden" id="studentActivityIdInput" name="activity_id">
+            <input type="hidden" id="studentEditContextInput" name="edit_context">
             <div class="modal-body">
                 <div class="form-group">
                     <label for="firstName">First Name</label>
@@ -261,6 +263,18 @@ if ($role === 'head') $roleLabel = 'Head of Subject';
                         <a href="#" id="uploadCsvLink" style="color: var(--accent); text-decoration: none;">Upload CSV instead</a>
                         <input type="file" id="csvUpload" accept=".csv, .txt" style="display: none;">
                     </div>
+                </div>
+
+                <div class="form-group activity-only activity-mandatory">
+                    <label style="display:flex; align-items:center; gap:8px;">
+                        <input type="checkbox" id="studentMandatory" name="mandatory" style="width:auto;">
+                        Mandatory
+                    </label>
+                </div>
+
+                <div class="form-group activity-only">
+                    <label for="studentNote">Student Note (this activity only)</label>
+                    <textarea id="studentNote" name="note" rows="3" placeholder="Optional note for this student on this activity..."></textarea>
                 </div>
             </div>
             <div class="modal-footer" style="justify-content: space-between;">
@@ -292,7 +306,7 @@ if ($role === 'head') $roleLabel = 'Head of Subject';
                 </div>
                 <div class="form-group">
                     <label for="activityDescriptionInput">Description</label>
-                    <textarea id="activityDescriptionInput" name="description" placeholder="Optional description..." rows="3" style="width:100%; padding:8px 12px; font-size:14px; border:1px solid var(--border); border-radius:6px; background:var(--bg-app); color:var(--text-primary); resize:vertical; font-family:inherit;"></textarea>
+                    <textarea id="activityDescriptionInput" name="description" placeholder="Optional description..." rows="3"></textarea>
                 </div>
                 <div class="form-group">
                     <label>Departments</label>
@@ -310,6 +324,13 @@ if ($role === 'head') $roleLabel = 'Head of Subject';
                         <option value="4">4 Sessions</option>
                         <option value="5">5 Sessions</option>
                     </select>
+                </div>
+
+                <div class="form-group">
+                    <label style="display:flex; align-items:center; gap:8px;">
+                        <input type="checkbox" id="activityHasMandatory" name="has_mandatory" style="width:auto;">
+                        Enable Mandatory column
+                    </label>
                 </div>
                 <div class="form-group">
                     <label>Assigned Students</label>

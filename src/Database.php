@@ -57,6 +57,7 @@ class Database {
             description TEXT,
             department VARCHAR(255) DEFAULT 'Other',
             sessions_per_week INT NOT NULL DEFAULT 1,
+            has_mandatory TINYINT(1) NOT NULL DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB;");
         
@@ -72,6 +73,12 @@ class Database {
         } else {
             // Migration: Ensure department is VARCHAR(255)
             $db->exec("ALTER TABLE activities MODIFY COLUMN department VARCHAR(255) DEFAULT 'Other'");
+        }
+
+        // Migration: Check if has_mandatory exists in activities
+        $stmt = $db->query("SHOW COLUMNS FROM activities LIKE 'has_mandatory'");
+        if ($stmt->rowCount() === 0) {
+            $db->exec("ALTER TABLE activities ADD COLUMN has_mandatory TINYINT(1) NOT NULL DEFAULT 1");
         }
 
         $db->exec("CREATE TABLE IF NOT EXISTS attendance (
@@ -92,7 +99,19 @@ class Database {
         $db->exec("CREATE TABLE IF NOT EXISTS activity_students (
             activity_id INT NOT NULL,
             student_id INT NOT NULL,
+            mandatory TINYINT(1) NOT NULL DEFAULT 0,
+            note TEXT NULL,
             PRIMARY KEY (activity_id, student_id)
         ) ENGINE=InnoDB;");
+
+        // Migrations: activity_students.mandatory + activity_students.note
+        $stmt = $db->query("SHOW COLUMNS FROM activity_students LIKE 'mandatory'");
+        if ($stmt->rowCount() === 0) {
+            $db->exec("ALTER TABLE activity_students ADD COLUMN mandatory TINYINT(1) NOT NULL DEFAULT 0");
+        }
+        $stmt = $db->query("SHOW COLUMNS FROM activity_students LIKE 'note'");
+        if ($stmt->rowCount() === 0) {
+            $db->exec("ALTER TABLE activity_students ADD COLUMN note TEXT NULL");
+        }
     }
 }
