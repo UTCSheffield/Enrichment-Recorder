@@ -410,25 +410,23 @@ if ($role === 'head') $roleLabel = 'Head of Subject';
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                             Add
                         </button>
-                        <div style="display: inline-block; position: relative;">
-                            <button type="button" id="assignYearGroupBtn" class="btn-tag-add" style="margin-left: 4px; background: var(--bg-hover);">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                                Add Year Group
-                            </button>
-                            <div id="assignYearGroupDropdown" class="student-picker-dropdown" style="display:none; width: 120px; left: 4px; top: 100%;">
-                                <div class="student-picker-list" id="assignYearGroupList">
-                                    <div class="picker-item" data-yg="9">Year 9</div>
-                                    <div class="picker-item" data-yg="10">Year 10</div>
-                                    <div class="picker-item" data-yg="11">Year 11</div>
-                                    <div class="picker-item" data-yg="12">Year 12</div>
-                                    <div class="picker-item" data-yg="13">Year 13</div>
-                                </div>
-                            </div>
-                        </div>
+                        <button type="button" id="assignYearGroupBtn" class="btn-tag-add btn-tag-add-emphasis">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                            Add Year Group
+                        </button>
                     </div>
                     <div id="assignStudentDropdown" class="student-picker-dropdown" style="display:none;">
                         <input type="text" id="assignStudentSearch" placeholder="Search students..." autocomplete="off">
                         <div id="assignStudentList" class="student-picker-list"></div>
+                    </div>
+                    <div id="assignYearGroupDropdown" class="student-picker-dropdown" style="display:none;">
+                        <div class="student-picker-list" id="assignYearGroupList">
+                            <div class="picker-item" data-yg="9">Year 9</div>
+                            <div class="picker-item" data-yg="10">Year 10</div>
+                            <div class="picker-item" data-yg="11">Year 11</div>
+                            <div class="picker-item" data-yg="12">Year 12</div>
+                            <div class="picker-item" data-yg="13">Year 13</div>
+                        </div>
                     </div>
                 </div>
             </div>

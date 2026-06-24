@@ -704,6 +704,22 @@
     // --- Assign Student Modal Logic ---
     let assignStudentIds = [];
 
+    function positionAssignDropdown(dropdown, trigger, width) {
+        dropdown.style.width = `${width}px`;
+        const rect = trigger.getBoundingClientRect();
+        const margin = 8;
+        const left = Math.min(Math.max(rect.left, margin), window.innerWidth - width - margin);
+        let top = rect.bottom + 4;
+        const height = dropdown.offsetHeight || 200;
+
+        if (top + height > window.innerHeight - margin) {
+            top = Math.max(margin, rect.top - height - 4);
+        }
+
+        dropdown.style.left = `${left}px`;
+        dropdown.style.top = `${top}px`;
+    }
+
     function renderAssignTags() {
         // Clear existing tags but keep the add button
         const tags = assignStudentTags.querySelectorAll('.tag-chip');
@@ -725,6 +741,16 @@
             };
             assignStudentTags.insertBefore(chip, assignStudentAddBtn);
         });
+
+        if (assignStudentDropdown.style.display === 'flex') {
+            positionAssignDropdown(assignStudentDropdown, assignStudentAddBtn, 250);
+        }
+
+        const assignYearGroupDropdown = document.getElementById('assignYearGroupDropdown');
+        const assignYearGroupBtn = document.getElementById('assignYearGroupBtn');
+        if (assignYearGroupDropdown && assignYearGroupBtn && assignYearGroupDropdown.style.display === 'flex') {
+            positionAssignDropdown(assignYearGroupDropdown, assignYearGroupBtn, 140);
+        }
     }
 
     function renderAssignPicker(filter = '') {
@@ -756,7 +782,10 @@
         const isVisible = assignStudentDropdown.style.display === 'flex';
         assignStudentDropdown.style.display = isVisible ? 'none' : 'flex';
         if (!isVisible) {
+            const assignYearGroupDropdown = document.getElementById('assignYearGroupDropdown');
+            if (assignYearGroupDropdown) assignYearGroupDropdown.style.display = 'none';
             renderAssignPicker();
+            positionAssignDropdown(assignStudentDropdown, assignStudentAddBtn, 250);
             assignStudentSearch.focus();
         }
     });
@@ -785,6 +814,10 @@
             e.stopPropagation();
             const isVisible = assignYearGroupDropdown.style.display === 'flex';
             assignYearGroupDropdown.style.display = isVisible ? 'none' : 'flex';
+            if (!isVisible) {
+                assignStudentDropdown.style.display = 'none';
+                positionAssignDropdown(assignYearGroupDropdown, assignYearGroupBtn, 140);
+            }
         });
 
         document.querySelectorAll('#assignYearGroupList .picker-item').forEach(item => {
@@ -1101,6 +1134,11 @@
         }
         modal.classList.remove('active');
         modal.setAttribute('aria-hidden', 'true');
+        if (modal === assignStudentModal) {
+            assignStudentDropdown.style.display = 'none';
+            const assignYearGroupDropdown = document.getElementById('assignYearGroupDropdown');
+            if (assignYearGroupDropdown) assignYearGroupDropdown.style.display = 'none';
+        }
         const form = modal.querySelector('form');
         if (form) form.reset();
     }

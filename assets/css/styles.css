@@ -514,7 +514,7 @@ kbd {
     border: 1px solid var(--border);
 }
 .modal-overlay.active .modal {
-    transform: scale(1);
+    transform: none;
 }
 
 .modal-header {
@@ -785,6 +785,11 @@ input[type="checkbox"] {
     gap: 4px;
     border: 1px solid var(--border);
 }
+.tag-chip span:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
 
 .tag-remove {
     cursor: pointer;
@@ -812,6 +817,9 @@ input[type="checkbox"] {
     color: var(--accent);
     background: var(--bg-hover);
 }
+.btn-tag-add-emphasis {
+    background: var(--bg-hover);
+}
 
 .student-picker-dropdown {
     position: absolute;
@@ -825,6 +833,29 @@ input[type="checkbox"] {
     overflow: hidden;
     display: flex;
     flex-direction: column;
+}
+
+#assignStudentTags {
+    align-content: flex-start;
+    max-height: min(260px, 42vh);
+    overflow-y: auto;
+}
+
+#assignStudentTags .tag-chip {
+    max-width: 100%;
+}
+
+#assignStudentModal .student-picker-dropdown {
+    z-index: 1001;
+}
+
+#assignStudentDropdown,
+#assignYearGroupDropdown {
+    position: fixed;
+}
+
+#assignYearGroupDropdown {
+    width: 140px;
 }
 
 #studentPickerSearch {
