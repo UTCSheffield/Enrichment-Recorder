@@ -259,9 +259,15 @@ if ($role === 'head') $roleLabel = 'Head of Subject';
                         <option value="12">Year 12</option>
                         <option value="13">Year 13</option>
                     </select>
-                    <div style="margin-top: 4px; font-size: 12px;">
+                    <div style="margin-top: 4px; font-size: 12px; width: 100%;">
                         <a href="#" id="uploadCsvLink" style="color: var(--accent); text-decoration: none;">Upload CSV instead</a>
                         <input type="file" id="csvUpload" accept=".csv, .txt" style="display: none;">
+                        <div id="csvProgressContainer" style="display: none; margin-top: 8px;">
+                            <div style="width: 100%; background: var(--border); border-radius: 4px; height: 8px; overflow: hidden;">
+                                <div id="csvProgressBar" style="width: 0%; height: 100%; background: var(--accent); transition: width 0.1s;"></div>
+                            </div>
+                            <div id="csvProgressText" style="text-align: right; margin-top: 4px; color: var(--text-secondary);">0 / 0</div>
+                        </div>
                     </div>
                 </div>
 
@@ -404,6 +410,21 @@ if ($role === 'head') $roleLabel = 'Head of Subject';
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                             Add
                         </button>
+                        <div style="display: inline-block; position: relative;">
+                            <button type="button" id="assignYearGroupBtn" class="btn-tag-add" style="margin-left: 4px; background: var(--bg-hover);">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                                Add Year Group
+                            </button>
+                            <div id="assignYearGroupDropdown" class="student-picker-dropdown" style="display:none; width: 120px; left: 4px; top: 100%;">
+                                <div class="student-picker-list" id="assignYearGroupList">
+                                    <div class="picker-item" data-yg="9">Year 9</div>
+                                    <div class="picker-item" data-yg="10">Year 10</div>
+                                    <div class="picker-item" data-yg="11">Year 11</div>
+                                    <div class="picker-item" data-yg="12">Year 12</div>
+                                    <div class="picker-item" data-yg="13">Year 13</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     <div id="assignStudentDropdown" class="student-picker-dropdown" style="display:none;">
                         <input type="text" id="assignStudentSearch" placeholder="Search students..." autocomplete="off">

@@ -301,11 +301,18 @@
 
     function renderStatsTable(filter = '') {
         statsTable.innerHTML = '';
-        const term = filter.toLowerCase();
+        const term = filter.trim().toLowerCase();
         // sam was here
 
+        if (!term) {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td colspan="3" style="text-align:center; padding: 20px; color: var(--text-secondary);">${state.students.length} students. Type to search.</td>`;
+            statsTable.appendChild(tr);
+            return;
+        }
+
         state.students.forEach(s => {
-            if (term && !s.name.toLowerCase().includes(term)) return;
+            if (!s.name.toLowerCase().includes(term)) return;
 
             const attended = statsData.students[s.id] || 0;
 
@@ -763,7 +770,38 @@
         if (!assignStudentDropdown.contains(e.target) && e.target !== assignStudentAddBtn) {
             assignStudentDropdown.style.display = 'none';
         }
+        const ygDropdown = document.getElementById('assignYearGroupDropdown');
+        const ygBtn = document.getElementById('assignYearGroupBtn');
+        if (ygDropdown && ygBtn && !ygDropdown.contains(e.target) && e.target !== ygBtn && !ygBtn.contains(e.target)) {
+            ygDropdown.style.display = 'none';
+        }
     });
+
+    // Add Year Group Logic
+    const assignYearGroupBtn = document.getElementById('assignYearGroupBtn');
+    const assignYearGroupDropdown = document.getElementById('assignYearGroupDropdown');
+    if (assignYearGroupBtn && assignYearGroupDropdown) {
+        assignYearGroupBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isVisible = assignYearGroupDropdown.style.display === 'flex';
+            assignYearGroupDropdown.style.display = isVisible ? 'none' : 'flex';
+        });
+
+        document.querySelectorAll('#assignYearGroupList .picker-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const yg = parseInt(item.dataset.yg);
+                const ygStudents = state.students.filter(s => s.year_group == yg);
+                ygStudents.forEach(s => {
+                    if (!assignStudentIds.includes(s.id)) {
+                        assignStudentIds.push(s.id);
+                    }
+                });
+                renderAssignTags();
+                assignYearGroupDropdown.style.display = 'none';
+            });
+        });
+    }
 
     // Department Selector Logic
     const departments = ['Computing', 'Health', 'Sport', 'Science', 'Maths', 'English', 'Other'];
@@ -1392,10 +1430,17 @@
     // Update renderStatsTable to be clickable
     function renderStatsTable(filter = '') {
         statsTable.innerHTML = '';
-        const term = filter.toLowerCase();
+        const term = filter.trim().toLowerCase();
+
+        if (!term) {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td colspan="3" style="text-align:center; padding: 20px; color: var(--text-secondary);">${state.students.length} students. Type to search.</td>`;
+            statsTable.appendChild(tr);
+            return;
+        }
 
         state.students.forEach(s => {
-            if (term && !s.name.toLowerCase().includes(term)) return;
+            if (!s.name.toLowerCase().includes(term)) return;
 
             const attended = statsData.students[s.id] || 0;
 
@@ -1628,6 +1673,9 @@
     // CSV Upload Logic
     const uploadCsvLink = q('#uploadCsvLink');
     const csvUpload = q('#csvUpload');
+    const csvProgressContainer = q('#csvProgressContainer');
+    const csvProgressBar = q('#csvProgressBar');
+    const csvProgressText = q('#csvProgressText');
 
     if (uploadCsvLink && csvUpload) {
         uploadCsvLink.addEventListener('click', (e) => {
@@ -1640,19 +1688,27 @@
             if (!file) return;
 
             const text = await file.text();
-            const lines = text.split(/\r?\n/);
+            const lines = text.split(/\r?\n/).map(line => line.trim()).filter(line => line);
             let count = 0;
+            let current = 0;
+            const totalLines = lines.length;
+            const PROGRESS_UPDATE_INTERVAL = 5;
+            
+            if (csvProgressContainer) csvProgressContainer.style.display = 'block';
 
             for (const line of lines) {
-                let trimmed = line.trim();
-                if (!trimmed) continue;
+                current++;
+                if (current % PROGRESS_UPDATE_INTERVAL === 0 || current === totalLines) {
+                    if (csvProgressBar) csvProgressBar.style.width = Math.round((current / totalLines) * 100) + '%';
+                    if (csvProgressText) csvProgressText.textContent = `${current} / ${totalLines}`;
+                }
 
                 // Remove quotes
-                trimmed = trimmed.replace(/['"]/g, '');
+                let cleanLine = line.replace(/['"]/g, '');
                 
-                const parts = trimmed.split(',').map(p => p.trim());
+                const parts = cleanLine.split(',').map(p => p.trim());
                 let yearGroup = 9;
-                let namePart = trimmed;
+                let namePart = cleanLine;
 
                 // Check if last part is a year group
                 if (parts.length > 1) {
@@ -1701,6 +1757,15 @@
 
                 const res = await api('create_student', 'POST', { name: fullName, year_group: yearGroup });
                 if (res.ok) count++;
+            }
+
+            if (csvProgressContainer) {
+                const PROGRESS_BAR_HIDE_DELAY = 1000;
+                setTimeout(() => {
+                    csvProgressContainer.style.display = 'none';
+                    csvProgressBar.style.width = '0%';
+                    csvProgressText.textContent = '0 / 0';
+                }, PROGRESS_BAR_HIDE_DELAY);
             }
 
             if (count > 0) {
