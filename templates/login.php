@@ -26,7 +26,7 @@
         <div class="auth-card">
             <div class="auth-card-header">
                 <h1>Enter Password</h1>
-                <p>Access is shared by role (Admin / Head of Subject / Teacher).</p>
+                <p>Access is shared by role (Super Admin / Admin / Head of Subject / Teacher).</p>
             </div>
 
             <?php if (!empty($error)) : ?>

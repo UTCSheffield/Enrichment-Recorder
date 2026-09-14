@@ -1,10 +1,4 @@
-"DOE, John",y11
-"SMITH, Jane",y10
-"JOHNSON, Robert",year 10
-"WILLIAMS, Emily",y 9
-"BROWN, Michael",12
-"JONES, Sarah",y 10
-"GARCIA, David",9
-"MILLER, Jessica",9
-"DAVIS, James",year 12
-"RODRIGUEZ, Maria",9
+Name,Year Group,PP,FSM,GENDER,SEN
+"DOE, John",y11,T,F,M,No Special Educational Need
+"SMITH, Jane",y10,F,T,F,Special Educational Needs
+"O'NEILL, Alex",year 9,T,F,O,

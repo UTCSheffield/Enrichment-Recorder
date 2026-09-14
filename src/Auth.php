@@ -42,7 +42,7 @@ class Auth {
 
         $role = $payload['role'] ?? null;
         $exp = $payload['exp'] ?? null;
-        if (!is_string($role) || !in_array($role, ['admin', 'head', 'teacher'], true)) {
+        if (!is_string($role) || !in_array($role, ['super_admin', 'admin', 'head', 'teacher'], true)) {
             return null;
         }
         if (!is_int($exp)) {
@@ -65,6 +65,15 @@ class Auth {
         $head = getenv('HEAD_OF_SUBJECT_PASSWORD') ?: '';
         $teacher = getenv('TEACHER_PASSWORD') ?: '';
 
+        $super = trim(getenv('SUPER_ADMIN_PASSWORD') ?: '');
+        if ($super !== '' && in_array($super, array_map('trim', [$admin, $head, $teacher]), true)) {
+            throw new \RuntimeException('SUPER_ADMIN_PASSWORD must be different from every other role password');
+        }
+        if ($super !== '' && hash_equals($super, $password)) {
+            self::setRoleCookie('super_admin');
+            return 'super_admin';
+        }
+
         if ($admin !== '' && hash_equals($admin, $password)) {
             self::setRoleCookie('admin');
             return 'admin';
@@ -85,9 +94,13 @@ class Auth {
         self::clearCookie();
     }
 
+    public static function isAdmin(): bool {
+        return in_array(self::role(), ['admin', 'super_admin'], true);
+    }
+
     public static function requireRole(array $allowedRoles): void {
         $role = self::role();
-        if ($role === null || !in_array($role, $allowedRoles, true)) {
+        if ($role === null || !(in_array($role, $allowedRoles, true) || ($role === 'super_admin' && in_array('admin', $allowedRoles, true)))) {
             http_response_code(403);
             header('Content-Type: application/json; charset=utf-8');
             echo json_encode(['error' => 'Forbidden']);

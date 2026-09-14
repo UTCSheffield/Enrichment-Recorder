@@ -3,14 +3,16 @@
 namespace App\Model;
 
 use PDO;
+use App\ActivityScope;
 
 class Activity {
-    public static function getAll(PDO $db): array {
-        $stmt = $db->query('SELECT id, name, description, department, sessions_per_week, has_mandatory FROM activities ORDER BY name');
+    public static function getAll(PDO $db, string $scope = 'normal'): array {
+        $stmt = $db->prepare('SELECT id, name, description, department, sessions_per_week, has_mandatory, scope, all_students_mandatory, event_date, event_rules FROM activities WHERE scope = ? ORDER BY name');
+        $stmt->execute([$scope]);
         $activities = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
         // Fetch associations
-        $stmt = $db->query('SELECT activity_id, student_id, mandatory, note FROM activity_students');
+        $stmt = $db->query('SELECT m.activity_id, m.student_id, m.mandatory, m.note FROM activity_students m JOIN activities a ON a.id = m.activity_id WHERE a.scope = ' . $db->quote($scope) . '');
         $associations = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
         $map = [];
@@ -29,8 +31,19 @@ class Activity {
         }
         
         foreach ($activities as &$act) {
+            if ($scope === 'event') { $act = Event::decorate($db, $act); continue; }
+            unset($act['event_rules']);
+            $weeks = $db->prepare('SELECT DISTINCT week_start FROM attendance WHERE activity_id=? ORDER BY week_start DESC');
+            $weeks->execute([$act['id']]);
+            $act['recorded_weeks'] = $scope === 'whole_school' ? $weeks->fetchAll(PDO::FETCH_COLUMN) : [];
+            $act['year_groups'] = ActivityScope::years($db, (int)$act['id']);
             $act['student_ids'] = $map[$act['id']] ?? [];
             $act['student_meta'] = $meta[$act['id']] ?? (object)[];
+            if ($scope === 'whole_school') {
+                $history = $db->prepare('SELECT DISTINCT student_id FROM attendance WHERE activity_id=?');
+                $history->execute([$act['id']]);
+                $act['student_ids'] = array_values(array_unique(array_merge($act['student_ids'], array_map('intval', $history->fetchAll(PDO::FETCH_COLUMN)))));
+            }
         }
         
         return $activities;
@@ -88,6 +101,9 @@ class Activity {
     public static function delete(PDO $db, int $id): void {
         $stmt = $db->prepare('DELETE FROM activities WHERE id = :id');
         $stmt->execute([':id' => $id]);
+        $db->prepare('DELETE FROM activity_year_groups WHERE activity_id = :id')->execute([':id' => $id]);
+        $db->prepare('DELETE FROM event_attendance WHERE event_id = ?')->execute([$id]);
+        $db->prepare('DELETE FROM event_participants WHERE event_id = ?')->execute([$id]);
         // Also clean up attendance and associations
         $db->prepare('DELETE FROM attendance WHERE activity_id = :id')->execute([':id' => $id]);
         $db->prepare('DELETE FROM activity_students WHERE activity_id = :id')->execute([':id' => $id]);

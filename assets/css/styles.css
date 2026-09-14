@@ -858,7 +858,7 @@ input[type="checkbox"] {
     width: 140px;
 }
 
-#studentPickerSearch {
+.student-picker-dropdown > input {
     border: none;
     border-bottom: 1px solid var(--border);
     border-radius: 0;
@@ -866,7 +866,7 @@ input[type="checkbox"] {
     font-size: 13px;
     background: var(--bg-content);
 }
-#studentPickerSearch:focus { box-shadow: none; }
+.student-picker-dropdown > input:focus { box-shadow: none; }
 
 .student-picker-list {
     max-height: 200px;
@@ -940,3 +940,198 @@ input[type="checkbox"] {
     padding: 20px;
     box-shadow: var(--shadow-sm);
 }
+
+/* Activity scope controls */
+.scope-switch { width: 100%; border: 0; background: transparent; color: var(--text-primary); font: inherit; text-align: left; white-space: normal; line-height: 1.45; }
+.scope-switch:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.year-options { border: 0; min-width: 0; }
+.year-options legend { margin-bottom: 10px; }
+.year-checkboxes { display: flex; flex-wrap: wrap; gap: 12px; }
+.year-checkboxes label, .checkbox-label { display: flex; align-items: center; gap: 8px; }
+.year-checkboxes input, .checkbox-label input { width: auto; }
+.form-help { color: var(--text-secondary); font-size: 12px; line-height: 1.5; margin-top: 8px; }
+[hidden] { display: none !important; }
+
+.sidebar-header { height: auto; min-height: 52px; flex-wrap: wrap; gap: 8px; padding-top: 10px; padding-bottom: 10px; }
+.mobile-nav-toggle { display: none; }
+@media (max-width: 768px) {
+    .mobile-nav-toggle { display: block; border: 0; border-bottom: 1px solid var(--border); padding: 12px 16px; text-align: left; font: inherit; color: var(--text-primary); background: var(--bg-sidebar); }
+    .sidebar.navigation-open .sidebar-content { display: block; max-height: 42vh; overflow-y: auto; }
+    .sidebar-footer { padding-top: 8px; padding-bottom: 8px; }
+}
+
+/* Keep the activity form inside the viewport, with persistent actions. */
+#activityModal { padding: 16px; }
+#activityModal > .modal {
+    max-width: 560px;
+    max-height: calc(100vh - 32px);
+    max-height: calc(100dvh - 32px);
+    overflow: hidden;
+}
+#activityForm {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+#activityModal .modal-header,
+#activityModal .modal-footer { flex-shrink: 0; }
+#activityForm .modal-body {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    gap: 20px;
+}
+#activityForm .modal-body > * { flex-shrink: 0; }
+#wholeSchoolOptions { display: flex; flex-direction: column; gap: 24px; }
+#activityForm .year-options legend {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+}
+#activityForm .year-checkboxes {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
+    gap: 12px;
+}
+#activityForm .year-checkboxes label,
+#activityForm .checkbox-label { min-height: 32px; gap: 10px; cursor: pointer; }
+#activityForm input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    flex: 0 0 20px;
+    padding: 0;
+}
+#activityForm input[type="checkbox"]:checked::after {
+    content: '';
+    position: absolute;
+    left: 6px;
+    top: 2px;
+    width: 5px;
+    height: 10px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+#activityForm input[type="checkbox"]:disabled { cursor: default; opacity: 0.55; }
+#activityForm .form-help { margin-top: 0; padding-left: 30px; }
+@media (max-width: 480px) {
+    #activityModal .modal-header,
+    #activityModal .modal-body,
+    #activityModal .modal-footer { padding: 16px; }
+    #activityForm .year-checkboxes { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    #activityModal .modal-footer { flex-wrap: wrap; }
+    #activityModal .modal-footer > div { margin-left: auto; }
+}
+
+/* Student editing and CSV preview use the same constrained scrolling layout. */
+/* Keep the activity form inside the viewport, with persistent actions. */
+:is(#studentModal, #csvImportModal) { padding: 16px; }
+:is(#studentModal, #csvImportModal) > .modal {
+    max-width: 560px;
+    max-height: calc(100vh - 32px);
+    max-height: calc(100dvh - 32px);
+    overflow: hidden;
+}
+:is(#studentForm, #csvImportForm) {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+:is(#studentModal, #csvImportModal) .modal-header,
+:is(#studentModal, #csvImportModal) .modal-footer { flex-shrink: 0; }
+:is(#studentForm, #csvImportForm) .modal-body {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    gap: 20px;
+}
+:is(#studentForm, #csvImportForm) .modal-body > * { flex-shrink: 0; }
+#wholeSchoolOptions { display: flex; flex-direction: column; gap: 24px; }
+:is(#studentForm, #csvImportForm) .year-options legend {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+}
+:is(#studentForm, #csvImportForm) .year-checkboxes {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
+    gap: 12px;
+}
+:is(#studentForm, #csvImportForm) .year-checkboxes label,
+:is(#studentForm, #csvImportForm) .checkbox-label { min-height: 32px; gap: 10px; cursor: pointer; }
+:is(#studentForm, #csvImportForm) input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    flex: 0 0 20px;
+    padding: 0;
+}
+:is(#studentForm, #csvImportForm) input[type="checkbox"]:checked::after {
+    content: '';
+    position: absolute;
+    left: 6px;
+    top: 2px;
+    width: 5px;
+    height: 10px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+:is(#studentForm, #csvImportForm) input[type="checkbox"]:disabled { cursor: default; opacity: 0.55; }
+:is(#studentForm, #csvImportForm) .form-help { margin-top: 0; padding-left: 30px; }
+@media (max-width: 480px) {
+    :is(#studentModal, #csvImportModal) .modal-header,
+    :is(#studentModal, #csvImportModal) .modal-body,
+    :is(#studentModal, #csvImportModal) .modal-footer { padding: 16px; }
+    :is(#studentForm, #csvImportForm) .year-checkboxes { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    :is(#studentModal, #csvImportModal) .modal-footer { flex-wrap: wrap; }
+    :is(#studentModal, #csvImportModal) .modal-footer > div { margin-left: auto; }
+}
+
+.student-characteristics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 16px; }
+.student-characteristics .form-group, .student-characteristics select { min-width: 0; }
+#csvImportModal > .modal { max-width: 900px; }
+.csv-preview-scroll { overflow-x: auto; }
+#csvPreview { font-size: 12px; }
+#csvPreview th, #csvPreview td { padding: 10px; white-space: normal; min-width: 80px; }
+#csvImportError { color: var(--danger); overflow-wrap: anywhere; }
+#csvImportModal .form-help { padding-left: 0; }
+@media (max-width: 480px) { .student-characteristics { grid-template-columns: minmax(0, 1fr); } }
+
+.scope-segments { position: relative; display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--border); border-radius: 10px; padding: 4px; margin: 0 0 4px; background: var(--bg-app); }
+.scope-selection { position: absolute; inset: 4px auto 4px 4px; width: calc(50% - 4px); border-radius: 7px; background: var(--accent); transition: transform 180ms ease; }
+.scope-segments[data-events="true"] .scope-selection { transform: translateX(100%); }
+.scope-segments button { position: relative; border: 0; border-radius: 7px; padding: 10px 6px; font: inherit; font-weight: 600; color: var(--text-secondary); background: transparent; cursor: pointer; }
+.scope-segments button[aria-pressed="true"] { color: white; }
+.scope-segments button:focus-visible { outline: 2px solid var(--text-primary); outline-offset: 2px; }
+.archive-link { color: var(--text-secondary); background: none; border: 0; text-decoration: underline; font: inherit; font-size: 12px; cursor: pointer; padding: 8px 4px; text-align: left; }
+#archiveControls { padding: 12px 20px; border-bottom: 1px solid var(--border); display: flex; flex-wrap: wrap; align-items: center; gap: 12px; color: var(--text-secondary); }
+#eventFields { display: flex; flex-direction: column; gap: 20px; }
+.event-history-control { display: flex; align-items: center; gap: 8px; margin: 8px 0 16px; color: var(--text-secondary); }
+@media (prefers-reduced-motion: reduce) { .scope-selection { transition: none; } }
+#eventNoteModal { padding: 16px; }
+#eventNoteForm { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+#eventNoteForm .modal-body { min-height: 0; overflow-y: auto; }
+#eventNoteForm .modal-footer { flex-shrink: 0; }
+.stats-table-container > div:has(#statsSearch) { flex-wrap: wrap; gap: 12px; }
+@media (prefers-reduced-motion: reduce) {
+    .modal-overlay, .modal { transition: none; }
+}
+
+
+/* Event assignment controls use the same tags and dropdowns as activity forms. */
+.student-picker-popover { position: fixed; margin-top: 0; }
+#eventFields .tags-input-container { max-height: 160px; overflow-y: auto; }
+#eventFields .tag-remove { background: none; border: 0; color: inherit; font: inherit; }
+.student-picker-dropdown button.picker-item { width: 100%; border: 0; background: none; color: var(--text-primary); text-align: left; font-family: inherit; }
+.student-picker-dropdown button.picker-item:hover, .student-picker-dropdown button.picker-item:focus-visible { background: var(--bg-hover); }
+#eventFields .form-help:empty { display: none; }
+
+#eventFields .form-help { padding-left: 0; }
+
+.picker-empty { padding: 8px; color: var(--text-secondary); font-size: 12px; }

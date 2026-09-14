@@ -4,3 +4,11 @@ data/
 docker-compose.yml
 Dockerfile
 README.md
+
+.env
+.idea
+.DS_Store
+
+output/
+.playwright-cli/
+**/__pycache__/

@@ -9,7 +9,7 @@ use Exception;
 class Database {
     private static $pdo;
 
-    public static function getConnection(): PDO {
+    public static function getConnection(bool $initialize = true): PDO {
         if (self::$pdo === null) {
             $host = getenv('DB_HOST');
             $dbName = getenv('DB_NAME');
@@ -25,7 +25,7 @@ class Database {
                     self::$pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
                     
                     // Initialize schema if tables don't exist
-                    self::initSchemaMySQL(self::$pdo);
+                    if ($initialize) self::initSchemaMySQL(self::$pdo);
                 } catch (Exception $e) {
                     throw new Exception('DB Connection failed: ' . $e->getMessage());
                 }
@@ -37,7 +37,7 @@ class Database {
     }
 
     // Used to create DB if it's needed
-    private static function initSchemaMySQL(PDO $db) {
+    public static function initSchemaMySQL(PDO $db) {
         $db->exec("CREATE TABLE IF NOT EXISTS students (
             id INT AUTO_INCREMENT PRIMARY KEY,
             name VARCHAR(255) NOT NULL,

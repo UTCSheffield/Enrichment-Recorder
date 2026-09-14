@@ -30,7 +30,14 @@ $action = $_REQUEST['action'] ?? null;
 // Auth actions (handled here because they are not JSON API responses)
 if ($action === 'auth_login') {
     $password = $_POST['password'] ?? '';
-    $role = Auth::login((string)$password);
+    try {
+        $role = Auth::login((string)$password);
+    } catch (\RuntimeException $e) {
+        http_response_code(503);
+        $error = $e->getMessage();
+        require __DIR__ . '/templates/login.php';
+        exit;
+    }
     if ($role === null) {
         $error = 'Incorrect password';
         require __DIR__ . '/templates/login.php';

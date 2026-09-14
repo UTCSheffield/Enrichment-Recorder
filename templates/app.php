@@ -1,6 +1,7 @@
 <?php
 /** @var string $role */
 $roleLabel = 'Teacher';
+if ($role === 'super_admin') $roleLabel = 'Super Admin';
 if ($role === 'admin') $roleLabel = 'Admin';
 if ($role === 'head') $roleLabel = 'Head of Subject';
 ?>
@@ -10,7 +11,7 @@ if ($role === 'head') $roleLabel = 'Head of Subject';
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=0" />
     <title>Enrichment Activity Recorder</title>
-    <link rel="stylesheet" href="/assets/css/styles.css?v=1.0.1">
+    <link rel="stylesheet" href="/assets/css/styles.css?v=8">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -38,7 +39,15 @@ if ($role === 'head') $roleLabel = 'Head of Subject';
             </div>
         </div>
         
-        <div class="sidebar-content">
+        <button type="button" class="mobile-nav-toggle" id="mobileNavToggle" aria-expanded="false" aria-controls="sidebarNavigation">Activities · Menu</button>
+        <div class="sidebar-content" id="sidebarNavigation">
+            <?php if ($role === 'super_admin'): ?>
+            <div class="scope-segments" id="activityScopeSwitch" role="group" aria-label="Record type">
+                <span class="scope-selection" aria-hidden="true"></span>
+                <button type="button" data-scope="normal" aria-pressed="true">Activities</button>
+                <button type="button" data-scope="event" aria-pressed="false">Events</button>
+            </div>
+            <?php endif; ?>
             <div class="nav-item" id="navStats">
                 <div style="display:flex; align-items:center; gap:8px;">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10"></path><path d="M12 20V4"></path><path d="M6 20v-6"></path></svg>
@@ -53,16 +62,18 @@ if ($role === 'head') $roleLabel = 'Head of Subject';
                 </div>
             </div>
 
-            <div class="section-label" style="margin-top: 12px;">Activities</div>
+            <div class="section-label" id="activityScopeLabel" style="margin-top: 12px;">Activities</div>
             <div id="activitiesList" class="nav-list"></div>
             
             <button id="addActivityBtn" class="btn-sidebar-action">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                 New Activity
             </button>
+            <?php if ($role === 'super_admin'): ?>
+            <?php endif; ?>
         </div>
 
-        <div class="sidebar-footer">
+        <div class="sidebar-footer" id="activityWeekSection">
             <div class="week-picker">
                 <label for="weekStart">Week of</label>
                 <input type="date" id="weekStart">
@@ -71,6 +82,7 @@ if ($role === 'head') $roleLabel = 'Head of Subject';
     </aside>
 
     <main class="main-content">
+        <div id="archiveControls" hidden><strong>Read-only archive</strong> <label for="archiveWeek">Recorded week</label> <select id="archiveWeek"></select></div>
         <header class="content-header">
             <div style="display:flex; align-items:center; gap:12px;">
                 <div>
@@ -105,7 +117,7 @@ if ($role === 'head') $roleLabel = 'Head of Subject';
                         <div class="stat-value" id="statTotalStudents">0</div>
                     </div>
                     <div class="stat-card">
-                        <h3>Total Activities</h3>
+                        <h3 data-activity-label="Total Activities" data-event-label="Total Events">Total Activities</h3>
                         <div class="stat-value" id="statTotalActivities">0</div>
                     </div>
                     <div class="stat-card">
@@ -116,11 +128,11 @@ if ($role === 'head') $roleLabel = 'Head of Subject';
 
                 <div class="charts-row">
                     <div class="chart-card">
-                        <h3>Attendance by Week</h3>
+                        <h3 data-activity-label="Attendance by Week" data-event-label="Attendance by Date">Attendance by Week</h3>
                         <canvas id="chartWeekly"></canvas>
                     </div>
                     <div class="chart-card">
-                        <h3>Top Activities</h3>
+                        <h3 data-activity-label="Top Activities" data-event-label="Top Events">Top Activities</h3>
                         <canvas id="chartActivities"></canvas>
                     </div>
                 </div>
@@ -128,6 +140,7 @@ if ($role === 'head') $roleLabel = 'Head of Subject';
                 <div class="stats-table-container">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
                         <h3>Student Performance</h3>
+                        <button type="button" class="btn-secondary" id="downloadCsvBtn">Export attendance</button>
                         <div style="display:flex; gap:8px;">
                             <input type="text" id="statsSearch" placeholder="Search students..." style="width:200px;">
                         </div>
@@ -136,8 +149,8 @@ if ($role === 'head') $roleLabel = 'Head of Subject';
                         <thead>
                             <tr>
                                 <th>Student</th>
-                                <th>Sessions Attended</th>
-                                <th>Activities</th>
+                                <th data-activity-label="Sessions Attended" data-event-label="Events Attended">Sessions Attended</th>
+                                <th data-activity-label="Activities" data-event-label="Events">Activities</th>
                             </tr>
                         </thead>
                         <tbody></tbody>
@@ -145,12 +158,12 @@ if ($role === 'head') $roleLabel = 'Head of Subject';
                 </div>
 
                 <div class="stats-table-container" style="margin-top: 24px;">
-                    <h3>Activities</h3>
+                    <h3 data-activity-label="Activities" data-event-label="Events">Activities</h3>
                     <table class="students-table" id="statsActivitiesTable">
                         <thead>
                             <tr>
-                                <th>Activity Name</th>
-                                <th>Sessions / Week</th>
+                                <th data-activity-label="Activity Name" data-event-label="Event Name">Activity Name</th>
+                                <th data-activity-label="Sessions / Week" data-event-label="Event Date">Sessions / Week</th>
                                 <th>Total Attendance</th>
                             </tr>
                         </thead>
@@ -218,11 +231,11 @@ if ($role === 'head') $roleLabel = 'Head of Subject';
             </div>
         </div>
 
-        <footer class="content-footer">
+        <footer class="content-footer" id="registerKeyboardHints">
             <div class="shortcuts">
                 <span><kbd>↑</kbd> <kbd>↓</kbd> Navigate</span>
                 <span><kbd>Space</kbd> Toggle</span>
-                <span><kbd>1</kbd>-<kbd>7</kbd> Session</span>
+                <span id="recurringSessionHint"><kbd>1</kbd>-<kbd>7</kbd> Session</span>
             </div>
         </footer>
     </main>
@@ -262,13 +275,27 @@ if ($role === 'head') $roleLabel = 'Head of Subject';
                     <div style="margin-top: 4px; font-size: 12px; width: 100%;">
                         <a href="#" id="uploadCsvLink" style="color: var(--accent); text-decoration: none;">Upload CSV instead</a>
                         <input type="file" id="csvUpload" accept=".csv, .txt" style="display: none;">
-                        <div id="csvProgressContainer" style="display: none; margin-top: 8px;">
-                            <div style="width: 100%; background: var(--border); border-radius: 4px; height: 8px; overflow: hidden;">
-                                <div id="csvProgressBar" style="width: 0%; height: 100%; background: var(--accent); transition: width 0.1s;"></div>
-                            </div>
-                            <div id="csvProgressText" style="text-align: right; margin-top: 4px; color: var(--text-secondary);">0 / 0</div>
-                        </div>
+
                     </div>
+                </div>
+
+                <div class="student-characteristics">
+                    <?php foreach ([
+                        'pp' => ['Pupil Premium (PP)', ['1' => 'True', '0' => 'False']],
+                        'fsm_ever' => ['FSM Ever', ['1' => 'True', '0' => 'False']],
+                        'gender' => ['Gender', ['F' => 'Female', 'M' => 'Male', 'O' => 'Other']],
+                        'sen_status' => ['SEN Status', ['none' => 'No special educational needs', 'sen' => 'Special educational needs']],
+                    ] as $field => [$label, $options]): ?>
+                    <div class="form-group">
+                        <label for="student_<?php echo $field; ?>"><?php echo $label; ?></label>
+                        <select id="student_<?php echo $field; ?>" name="<?php echo $field; ?>">
+                            <option value="">Not recorded</option>
+                            <?php foreach ($options as $value => $text): ?>
+                            <option value="<?php echo $value; ?>"><?php echo $text; ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <?php endforeach; ?>
                 </div>
 
                 <div class="form-group activity-only activity-mandatory">
@@ -290,6 +317,36 @@ if ($role === 'head') $roleLabel = 'Head of Subject';
                     <button type="submit" class="btn-primary" id="saveStudentBtn">Add Student</button>
                 </div>
             </div>
+        </form>
+    </div>
+</div>
+
+<!-- CSV import preview -->
+<div id="csvImportModal" class="modal-overlay" aria-hidden="true">
+    <div class="modal">
+        <div class="modal-header"><h3>Import students</h3><button type="button" class="icon-btn close-modal" aria-label="Close import">×</button></div>
+        <form id="csvImportForm">
+            <div class="modal-body">
+                <p class="form-help">Creates new students only. Existing student records will not be updated.</p>
+                <label class="checkbox-label"><input type="checkbox" id="csvHasHeader"> First row contains column headings</label>
+                <div class="form-group"><label for="csvNameOrder">Full-name order (names without a comma)</label><select id="csvNameOrder"><option value="first_last">First name then surname</option><option value="last_first">Surname then first name</option></select></div>
+                <div id="csvMappings" class="student-characteristics"></div>
+                <p class="form-help">Unmapped fields are Not recorded. A blank mapped SEN cell means no needs. Unmapped year group defaults to Year 9.</p>
+                <p id="csvImportSummary" aria-live="polite"></p>
+                <p id="csvImportError" role="alert" hidden></p>
+                <div class="csv-preview-scroll"><table class="students-table" id="csvPreview"></table></div>
+            </div>
+            <div class="modal-footer"><button type="button" class="btn-secondary close-modal">Cancel</button><button type="submit" class="btn-primary" id="confirmCsvImport">Import students</button></div>
+        </form>
+    </div>
+</div>
+
+<div id="eventNoteModal" class="modal-overlay" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="eventNoteTitle">
+        <div class="modal-header"><h3 id="eventNoteTitle">Event notes</h3><button type="button" class="close-modal" aria-label="Close">×</button></div>
+        <form id="eventNoteForm">
+            <div class="modal-body"><div class="form-group"><label for="eventNoteText">Student notes</label><textarea id="eventNoteText" rows="5"></textarea></div></div>
+            <div class="modal-footer"><button type="button" class="btn-secondary close-modal">Cancel</button><button type="submit" id="saveEventNote" class="btn-primary">Save notes</button></div>
         </form>
     </div>
 </div>
@@ -321,7 +378,8 @@ if ($role === 'head') $roleLabel = 'Head of Subject';
                     </div>
                     <input type="hidden" id="activityDepartmentInput" name="department">
                 </div>
-                <div class="form-group">
+                <div id="eventFields" hidden></div>
+                <div class="form-group" id="recurringSessionField">
                     <label for="activitySessions">Sessions per Week</label>
                     <select id="activitySessions" name="sessions_per_week" required style="width:100%">
                         <option value="1">1 Session</option>
@@ -332,9 +390,23 @@ if ($role === 'head') $roleLabel = 'Head of Subject';
                     </select>
                 </div>
 
+                <div id="wholeSchoolOptions" hidden>
+                    <fieldset class="form-group year-options">
+                        <legend>Eligible year groups</legend>
+                        <div class="year-checkboxes">
+                        <?php foreach ([9, 10, 11, 12, 13] as $year): ?>
+                            <label><input type="checkbox" name="eligible_year" value="<?php echo $year; ?>"> Year <?php echo $year; ?></label>
+                        <?php endforeach; ?>
+                        </div>
+                    </fieldset>
+                    <div class="form-group">
+                        <label class="checkbox-label"><input type="checkbox" id="allStudentsMandatory"> All students mandatory</label>
+                        <p id="automaticRosterHelp" class="form-help" hidden>Every student in the selected years is assigned automatically. The register stays up to date when students join or change year.</p>
+                    </div>
+                </div>
                 <div class="form-group">
-                    <label style="display:flex; align-items:center; gap:8px;">
-                        <input type="checkbox" id="activityHasMandatory" name="has_mandatory" style="width:auto;">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="activityHasMandatory" name="has_mandatory">
                         Enable Mandatory column
                     </label>
                 </div>
@@ -450,11 +522,11 @@ if ($role === 'head') $roleLabel = 'Head of Subject';
         <div class="modal-body">
             <div class="stats-grid" style="grid-template-columns: 1fr 1fr; margin-bottom: 16px;">
                 <div class="stat-card">
-                    <h3>Total Sessions</h3>
+                    <h3 data-activity-label="Total Sessions" data-event-label="Total Events">Total Sessions</h3>
                     <div class="stat-value" id="studentTotalSessions">0</div>
                 </div>
                 <div class="stat-card">
-                    <h3>Activities Attended</h3>
+                    <h3 data-activity-label="Activities Attended" data-event-label="Events Attended">Activities Attended</h3>
                     <div class="stat-value" id="studentTotalActivities">0</div>
                 </div>
             </div>
@@ -495,7 +567,7 @@ if ($role === 'head') $roleLabel = 'Head of Subject';
             <h4>Top Students</h4>
             <div id="activityStudentList" style="margin-bottom: 16px; max-height: 200px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px;"></div>
 
-            <h4>Weekly Trend</h4>
+            <h4 id="activityTrendTitle" data-activity-label="Weekly Trend" data-event-label="Event Attendance">Weekly Trend</h4>
             <div style="height: 200px;">
                 <canvas id="activityTrendChart"></canvas>
             </div>
@@ -539,6 +611,9 @@ if ($role === 'head') $roleLabel = 'Head of Subject';
 
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/plugins/weekSelect/weekSelect.js"></script>
-<script src="/assets/js/app.js?v=1.1.0" defer></script>
+<script src="/assets/js/student-csv.js?v=1" defer></script>
+<script src="/assets/js/student-picker.js?v=1" defer></script>
+<script src="/assets/js/event-form.js?v=3" defer></script>
+<script src="/assets/js/app.js?v=8" defer></script>
 </body>
 </html>

@@ -26,6 +26,7 @@ Below are example screenshots of the application in action:
 ## Password Roles
 When you open the site, you’ll be prompted for a password. The password you enter determines your role:
 
+- **Super Admin** (`SUPER_ADMIN_PASSWORD`): all Admin features plus one-time Events with eligible/mandatory years and individual attendance overrides, and a read-only whole-school archive.
 - **Admin** (`ADMIN_PASSWORD`): full access (Statistics + Settings + student management).
 - **Head of Subject** (`HEAD_OF_SUBJECT_PASSWORD`): can create/edit activities, assign students to activities, and mark attendance.
 - **Teacher** (`TEACHER_PASSWORD`): can mark attendance and assign students to existing activities.
@@ -47,9 +48,20 @@ This setup runs the application with Apache/PHP and a MySQL database.
 3. Run the following command in the project root:
 
 ```bash
-docker compose up --build
+docker compose build app
+docker compose up -d db
+docker compose run --rm --no-deps app php scripts/migrate.php
+docker compose up -d app
 ```
 
 4. Make sure that you reset the details in the .env for password and encryption key.
 
 5. Open `http://localhost:8080` (or the port defined in your `.env` file) in your browser
+
+See [Events deployment and migration](docs/whole-school-deployment.md) before upgrading an existing installation. Production migration must be rehearsed on a restored backup.
+
+Student records now include editable PP, FSM Ever, gender (F/M/O), and SEN status. Use **Upload CSV instead** when adding a student to review column mappings and preview a create-only import. See [example.csv](example.csv) and the student-characteristics section of the [deployment guide](docs/whole-school-deployment.md). Existing records start with Not recorded in each new field.
+
+Super Admin can switch between **Activities | Events** above Statistics. Events use a required date and a single attendance mark; Activities retain weekly sessions. Past event registers keep participant snapshots. Existing whole-school records remain preserved read-only in storage; the archive navigation is currently hidden.
+
+Upgrading an older production checkout? Follow the [production upgrade checklist](docs/production-upgrade.md). Do not start the new app before running its explicit migration.

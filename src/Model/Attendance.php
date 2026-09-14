@@ -5,8 +5,16 @@ namespace App\Model;
 use PDO;
 
 class Attendance {
-    public static function getForActivity(PDO $db, int $activityId, string $weekStart): array {
-        $stmt = $db->prepare('SELECT student_id, session_index, present FROM attendance WHERE activity_id = :activity AND week_start = :week_start');
+    private static function source(PDO $db, string $scope): string {
+        if (!in_array($scope, ['normal', 'whole_school', 'event'], true)) throw new \InvalidArgumentException('Invalid scope');
+        if ($scope === 'event') return "(SELECT e.student_id,e.event_id AS activity_id,a.event_date AS week_start,1 AS session_index,e.present,p.name AS student_name,p.year_group FROM event_attendance e JOIN activities a ON a.id=e.event_id JOIN event_participants p ON p.event_id=e.event_id AND p.student_id=e.student_id WHERE a.scope='event')";
+        $students = $scope === 'whole_school' ? 'archived_students' : 'students';
+        return '(SELECT records.*,s.name AS student_name,s.year_group FROM attendance records JOIN activities scoped ON scoped.id = records.activity_id JOIN ' . $students . ' s ON s.id=records.student_id WHERE scoped.scope = ' . $db->quote($scope) . ')';
+    }
+
+    public static function getForActivity(PDO $db, int $activityId, string $weekStart, string $scope = 'normal'): array {
+        $source = self::source($db, $scope);
+        $stmt = $db->prepare("SELECT student_id, session_index, present FROM {$source} attendance WHERE activity_id = :activity AND week_start = :week_start");
         $stmt->execute([':activity' => $activityId, ':week_start' => $weekStart]);
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
         $out = [];
@@ -32,29 +40,29 @@ class Attendance {
         ]);
     }
 
-    public static function getGlobalStats(PDO $db): array {
+    public static function getGlobalStats(PDO $db, string $scope = 'normal'): array {
+        $source = self::source($db, $scope);
         // Total present per student
-        $stmt = $db->query("SELECT student_id, COUNT(*) as count FROM attendance WHERE present = 1 GROUP BY student_id");
+        $stmt = $db->query("SELECT student_id, COUNT(*) as count FROM {$source} attendance WHERE present = 1 GROUP BY student_id");
         $studentStats = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
 
         // Total present per activity
-        $stmt = $db->query("SELECT activity_id, COUNT(*) as count FROM attendance WHERE present = 1 GROUP BY activity_id");
+        $stmt = $db->query("SELECT activity_id, COUNT(*) as count FROM {$source} attendance WHERE present = 1 GROUP BY activity_id");
         $activityStats = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
 
         // Total present per year group
         $stmt = $db->query("
-            SELECT s.year_group, COUNT(*) as count 
-            FROM attendance att
-            JOIN students s ON att.student_id = s.id
+            SELECT att.year_group, COUNT(*) as count
+            FROM {$source} att
             WHERE att.present = 1 
-            GROUP BY s.year_group
+            GROUP BY att.year_group
         ");
         $yearGroupStats = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
 
         // Total present per department
         $stmt = $db->query("
             SELECT a.department, COUNT(*) as count 
-            FROM attendance att
+            FROM {$source} att
             JOIN activities a ON att.activity_id = a.id
             WHERE att.present = 1 
             GROUP BY a.department
@@ -74,7 +82,7 @@ class Attendance {
         }
 
         // Attendance over time (by week)
-        $stmt = $db->query("SELECT week_start, COUNT(*) as count FROM attendance WHERE present = 1 GROUP BY week_start ORDER BY week_start");
+        $stmt = $db->query("SELECT week_start, COUNT(*) as count FROM {$source} attendance WHERE present = 1 GROUP BY week_start ORDER BY week_start");
         $weeklyStats = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         return [
@@ -86,16 +94,17 @@ class Attendance {
         ];
     }
 
-    public static function getStudentStats(PDO $db, int $studentId): array {
+    public static function getStudentStats(PDO $db, int $studentId, string $scope = 'normal'): array {
+        $source = self::source($db, $scope);
         // Total sessions attended
-        $stmt = $db->prepare("SELECT COUNT(*) FROM attendance WHERE student_id = :sid AND present = 1");
+        $stmt = $db->prepare("SELECT COUNT(*) FROM {$source} attendance WHERE student_id = :sid AND present = 1");
         $stmt->execute([':sid' => $studentId]);
         $total = $stmt->fetchColumn();
 
         // Breakdown by activity
         $stmt = $db->prepare("
             SELECT a.name, COUNT(*) as count 
-            FROM attendance att
+            FROM {$source} att
             JOIN activities a ON att.activity_id = a.id
             WHERE att.student_id = :sid AND att.present = 1
             GROUP BY a.name
@@ -105,8 +114,8 @@ class Attendance {
 
         // History (Date, Activity, Session)
         $stmt = $db->prepare("
-            SELECT att.week_start, a.name as activity_name, att.session_index
-            FROM attendance att
+            SELECT att.week_start, att.week_start AS date, a.name as activity_name, att.session_index
+            FROM {$source} att
             JOIN activities a ON att.activity_id = a.id
             WHERE att.student_id = :sid AND att.present = 1
             ORDER BY att.week_start DESC, att.session_index ASC
@@ -117,19 +126,19 @@ class Attendance {
         return ['total' => $total, 'by_activity' => $byActivity, 'history' => $history];
     }
 
-    public static function getActivityStats(PDO $db, int $activityId): array {
+    public static function getActivityStats(PDO $db, int $activityId, string $scope = 'normal'): array {
+        $source = self::source($db, $scope);
         // Total attendance count
-        $stmt = $db->prepare("SELECT COUNT(*) FROM attendance WHERE activity_id = :aid AND present = 1");
+        $stmt = $db->prepare("SELECT COUNT(*) FROM {$source} attendance WHERE activity_id = :aid AND present = 1");
         $stmt->execute([':aid' => $activityId]);
         $total = $stmt->fetchColumn();
 
         // Breakdown by student
         $stmt = $db->prepare("
-            SELECT s.name, COUNT(*) as count 
-            FROM attendance att
-            JOIN students s ON att.student_id = s.id
+            SELECT att.student_name, COUNT(*) as count
+            FROM {$source} att
             WHERE att.activity_id = :aid AND att.present = 1
-            GROUP BY s.name
+            GROUP BY att.student_name
             ORDER BY count DESC
         ");
         $stmt->execute([':aid' => $activityId]);
@@ -138,7 +147,7 @@ class Attendance {
         // Weekly trend
         $stmt = $db->prepare("
             SELECT week_start, COUNT(*) as count 
-            FROM attendance att
+            FROM {$source} att
             WHERE att.activity_id = :aid AND att.present = 1
             GROUP BY week_start
             ORDER BY week_start
@@ -149,71 +158,74 @@ class Attendance {
         return ['total' => $total, 'by_student' => $byStudent, 'weekly' => $weekly];
     }
 
-    public static function getActivityExportData(PDO $db, int $activityId): array {
+    public static function getActivityExportData(PDO $db, int $activityId, string $scope = 'normal'): array {
+        $source = self::source($db, $scope);
         $sql = "
             SELECT 
-                s.name as student_name,
+                att.student_name as student_name,
+                att.student_id,
                 att.week_start,
                 COUNT(*) as count
-            FROM attendance att
-            JOIN students s ON att.student_id = s.id
+            FROM {$source} att
             WHERE att.activity_id = :aid AND att.present = 1
-            GROUP BY s.name, att.week_start
-            ORDER BY s.name, att.week_start
+            GROUP BY att.student_id, att.student_name, att.week_start
+            ORDER BY att.student_name, att.week_start
         ";
         $stmt = $db->prepare($sql);
         $stmt->execute([':aid' => $activityId]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
-    public static function getYearGroupExportData(PDO $db, int $yearGroup): array {
+    public static function getYearGroupExportData(PDO $db, int $yearGroup, string $scope = 'normal'): array {
+        $source = self::source($db, $scope);
         $sql = "
             SELECT 
-                s.name as student_name,
+                att.student_name as student_name,
+                att.student_id,
                 att.week_start,
                 COUNT(*) as count
-            FROM attendance att
-            JOIN students s ON att.student_id = s.id
-            WHERE s.year_group = :yg AND att.present = 1
-            GROUP BY s.name, att.week_start
-            ORDER BY s.name, att.week_start
+            FROM {$source} att
+            WHERE att.year_group = :yg AND att.present = 1
+            GROUP BY att.student_id, att.student_name, att.week_start
+            ORDER BY att.student_name, att.week_start
         ";
         $stmt = $db->prepare($sql);
         $stmt->execute([':yg' => $yearGroup]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
-    public static function getDepartmentExportData(PDO $db, string $department): array {
+    public static function getDepartmentExportData(PDO $db, string $department, string $scope = 'normal'): array {
+        $source = self::source($db, $scope);
         $sql = "
             SELECT 
-                s.name as student_name,
+                att.student_name as student_name,
+                att.student_id,
                 att.week_start,
                 COUNT(*) as count
-            FROM attendance att
-            JOIN students s ON att.student_id = s.id
+            FROM {$source} att
             JOIN activities a ON att.activity_id = a.id
             WHERE FIND_IN_SET(:dept, a.department) > 0 AND att.present = 1
-            GROUP BY s.name, att.week_start
-            ORDER BY s.name, att.week_start
+            GROUP BY att.student_id, att.student_name, att.week_start
+            ORDER BY att.student_name, att.week_start
         ";
         $stmt = $db->prepare($sql);
         $stmt->execute([':dept' => $department]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
-    public static function getExportData(PDO $db): array {
+    public static function getExportData(PDO $db, string $scope = 'normal'): array {
+        $source = self::source($db, $scope);
         // Get per-week stats per student
         $sql = "
             SELECT 
-                s.id as student_id,
-                s.name as student_name,
+                att.student_id as student_id,
+                att.student_name as student_name,
                 att.week_start,
                 SUM(CASE WHEN att.present = 1 THEN 1 ELSE 0 END) as attended,
                 SUM(CASE WHEN att.present = 0 THEN 1 ELSE 0 END) as missed
-            FROM attendance att
-            JOIN students s ON att.student_id = s.id
-            GROUP BY s.id, att.week_start
-            ORDER BY s.name, att.week_start
+            FROM {$source} att
+            GROUP BY att.student_id, att.student_name, att.week_start
+            ORDER BY att.student_name, att.week_start
         ";
         $stmt = $db->query($sql);
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -223,7 +235,7 @@ class Attendance {
             SELECT 
                 student_id,
                 SUM(CASE WHEN present = 1 THEN 1 ELSE 0 END) as total_attended
-            FROM attendance
+            FROM {$source} attendance
             GROUP BY student_id
         ";
         $stmtTotal = $db->query($sqlTotal);

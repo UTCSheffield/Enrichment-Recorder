@@ -10,6 +10,7 @@ services:
       - DB_PASS=${DB_PASS:-userpassword}
       - PORT=${PORT:-8080}
       - AUTH_SECRET=${AUTH_SECRET:-dev-change-me-please}
+      - SUPER_ADMIN_PASSWORD=${SUPER_ADMIN_PASSWORD:-}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
       - HEAD_OF_SUBJECT_PASSWORD=${HEAD_OF_SUBJECT_PASSWORD:-head123}
       - TEACHER_PASSWORD=${TEACHER_PASSWORD:-teacher123}

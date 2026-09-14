@@ -2,12 +2,21 @@
     const q = sel => document.querySelector(sel); // Shorted code since it's used a million times
     const role = (window.__ER_ROLE__ || 'teacher');
     const can = {
-        admin: role === 'admin',
-        head: role === 'admin' || role === 'head',
-        teacher: role === 'admin' || role === 'head' || role === 'teacher',
+        admin: role === 'super_admin' || role === 'admin',
+        head: role === 'super_admin' || role === 'admin' || role === 'head',
+        teacher: role === 'super_admin' || role === 'admin' || role === 'head' || role === 'teacher',
     };
 
+    let activityScope = 'normal';
+    let viewGeneration = 0;
+    const scopeLabel = () => activityScope === 'event' ? 'Events' : activityScope === 'whole_school' ? 'Archived whole-school activities' : 'Activities';
+    let archiveWeek = '';
+    let showEventHistory = false;
+    const reportStudents = () => activityScope === 'event' ? (state.reportStudents || state.students) : state.students;
+
     const api = async (action, method = 'GET', body = null) => {
+        const requestGeneration = viewGeneration;
+        body = { ...(body || {}), scope: activityScope };
         const opts = { method, headers: {} };
         let url = `/?action=${encodeURIComponent(action)}`;
         if (method === 'GET') {
@@ -24,6 +33,7 @@
             return { error: 'Unauthorized' };
         }
         const data = await res.json();
+        if (requestGeneration !== viewGeneration) return { stale: true };
         if (res.status === 403 && !data?.error) {
             data.error = 'Not allowed';
         }
@@ -147,10 +157,22 @@
 
     async function loadState() {
         const res = await api('get_state');
+        if (res.stale) return;
         if (res.error) return alert(res.error);
         state.students = res.students;
+        state.reportStudents = res.report_students;
+        state.schoolStudentCount = res.school_student_count;
+        state.today = res.today;
         state.activities = res.activities;
         renderActivities();
+        if (!state.activities.length && registerArea.style.display !== 'none') {
+            selectedActivity = null;
+            activityTitle.textContent = `${scopeLabel()}`;
+            activityDescription.textContent = '';
+            editActivityBtn.style.display = 'none';
+            assignStudentBtn.style.display = 'none';
+            registerArea.innerHTML = `<div class="empty-state">${activityScope === 'event' ? 'Select an event from the sidebar, or use New Event to create one.' : activityScope === 'normal' ? 'Select an activity from the sidebar, or use New Activity to create one.' : 'No archived activities.'}</div>`;
+        }
         if (!selectedWeekStart) selectedWeekStart = isoMonday();
         weekStartInput.value = selectedWeekStart;
 
@@ -167,18 +189,40 @@
 
     function renderActivities() {
         activitiesList.innerHTML = '';
-        state.activities.forEach(a => {
+        state.activities.sort((a,b) => {
+            if (activityScope !== 'event') return 0;
+            const ap = a.event_date < state.today, bp = b.event_date < state.today;
+            return ap !== bp ? (ap ? 1 : -1) : (ap ? b.event_date.localeCompare(a.event_date) : a.event_date.localeCompare(b.event_date));
+        }).forEach(a => {
             const el = document.createElement('div');
             el.tabIndex = 0;
             el.className = 'nav-item' + (selectedActivity === a.id ? ' active' : '');
-            el.innerHTML = `<span>${a.name}</span><span class="meta">${a.sessions_per_week}/wk</span>`;
+            el.innerHTML = `<span></span><span class="meta"></span>`;
+            el.firstElementChild.textContent = a.name;
+            el.lastElementChild.textContent = activityScope === 'event' ? a.event_date : `${a.sessions_per_week}/wk`;
+            el.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectActivity(a.id); } };
             el.onclick = () => selectActivity(a.id);
             activitiesList.appendChild(el);
         });
     }
 
+    function closeMobileNavigation() {
+        q('.sidebar').classList.remove('navigation-open');
+        q('#mobileNavToggle').setAttribute('aria-expanded', 'false');
+    }
+    q('#mobileNavToggle').addEventListener('click', () => {
+        const open = q('.sidebar').classList.toggle('navigation-open');
+        q('#mobileNavToggle').setAttribute('aria-expanded', String(open));
+    });
+
     async function selectActivity(id) {
+        if (!state.activities.some(activity => activity.id == id)) return;
+        closeMobileNavigation();
         selectedActivity = id;
+        showEventHistory = false;
+        state.attendance = {};
+        currentRegisterStudents = [];
+        registerArea.textContent = 'Loading register…';
         registerArea.style.display = 'block';
         statsArea.style.display = 'none';
         settingsArea.style.display = 'none';
@@ -186,17 +230,25 @@
         navSettings.classList.remove('active');
         
         createStudentBtn.style.display = 'none';
-        assignStudentBtn.style.display = 'flex';
+        assignStudentBtn.style.display = 'none';
 
         renderActivities();
         const act = state.activities.find(x => x.id == id);
+        assignStudentBtn.style.display = act && activityScope === 'normal' ? 'flex' : 'none';
+        if (activityScope === 'whole_school') {
+            const weeks = act.recorded_weeks || [];
+            if (!weeks.includes(archiveWeek)) archiveWeek = weeks[0] || '';
+            q('#archiveWeek').replaceChildren(...weeks.map(week => new Option(week, week)));
+            q('#archiveWeek').value = archiveWeek;
+        }
         activityTitle.textContent = act ? act.name : 'Register';
-        activityDescription.textContent = act ? (act.description || '') : '';
-        editActivityBtn.style.display = (act && can.head) ? 'flex' : 'none';
+        activityDescription.textContent = act ? [activityScope === 'event' ? act.event_date : '', act.description || ''].filter(Boolean).join(' · ') : '';
+        editActivityBtn.style.display = (act && can.head && activityScope !== 'whole_school') ? 'flex' : 'none';
         await loadAttendance();
     }
 
     async function loadStats() {
+        closeMobileNavigation();
         selectedActivity = null;
         renderActivities(); // Clear active state
         navStats.classList.add('active');
@@ -204,13 +256,14 @@
         registerArea.style.display = 'none';
         statsArea.style.display = 'block';
         settingsArea.style.display = 'none';
-        activityTitle.textContent = 'Statistics';
+        activityTitle.textContent = `${scopeLabel()} statistics`;
         activityDescription.textContent = '';
         editActivityBtn.style.display = 'none';
         createStudentBtn.style.display = 'none';
         assignStudentBtn.style.display = 'none';
 
         const res = await api('get_stats');
+        if (res.stale) return;
         if (res.error) return alert(res.error);
         statsData = res.stats;
 
@@ -221,7 +274,7 @@
         if (!statsData) return;
 
         // KPI Cards
-        statTotalStudents.textContent = state.students.length;
+        statTotalStudents.textContent = state.schoolStudentCount ?? state.students.length;
         statTotalActivities.textContent = state.activities.length;
 
         // Calculate total attendance
@@ -283,7 +336,7 @@
             data: {
                 labels: actLabels,
                 datasets: [{
-                    label: 'Sessions',
+                    label: activityScope === 'event' ? 'Events' : 'Sessions',
                     data: actCounts,
                     backgroundColor: [
                         '#007aff', '#34c759', '#ff9500', '#ff3b30', '#5856d6', '#af52de'
@@ -306,12 +359,12 @@
 
         if (!term) {
             const tr = document.createElement('tr');
-            tr.innerHTML = `<td colspan="3" style="text-align:center; padding: 20px; color: var(--text-secondary);">${state.students.length} students. Type to search.</td>`;
+            tr.innerHTML = `<td colspan="3" style="text-align:center; padding: 20px; color: var(--text-secondary);">${reportStudents().length} students. Type to search.</td>`;
             statsTable.appendChild(tr);
             return;
         }
 
-        state.students.forEach(s => {
+        reportStudents().forEach(s => {
             if (!s.name.toLowerCase().includes(term)) return;
 
             const attended = statsData.students[s.id] || 0;
@@ -342,7 +395,7 @@
             tr.style.cursor = 'pointer';
             tr.innerHTML = `
                 <td>${a.name}</td>
-                <td>${avgPerWeek}</td>
+                <td>${activityScope === 'event' ? a.event_date : avgPerWeek}</td>
                 <td>${totalAttendance}</td>
             `;
             tr.onclick = () => openActivityStats(a.id);
@@ -395,14 +448,23 @@
         });
     }
 
+    downloadCsvBtn?.addEventListener('click', async () => {
+        const res = await api('get_export_stats');
+        if (res.stale) return;
+        if (res.error) return alert(res.error);
+        processAndDownloadCsv(res.data.map(row => ({...row, count: row.attended})), 'Attendance_Report.csv');
+    });
+
     async function downloadYearGroupCsv(yearGroup) {
         const res = await api('get_year_group_export', 'GET', { year_group: yearGroup });
+        if (res.stale) return;
         if (res.error) return alert(res.error);
         processAndDownloadCsv(res.data, `Year_${yearGroup}_Report.csv`);
     }
 
     async function downloadDepartmentCsv(department) {
         const res = await api('get_department_export', 'GET', { department: department });
+        if (res.stale) return;
         if (res.error) return alert(res.error);
         processAndDownloadCsv(res.data, `${department}_Report.csv`);
     }
@@ -416,34 +478,35 @@
         // 2. Map attendance data
         const attendanceMap = {};
         rawData.forEach(r => {
-            if (!attendanceMap[r.student_name]) {
-                attendanceMap[r.student_name] = {
+            if (!attendanceMap[r.student_id ?? r.student_name]) {
+                attendanceMap[r.student_id ?? r.student_name] = {
+                    name: r.student_name,
                     weeks: {},
                     total: 0
                 };
             }
             const count = parseInt(r.count);
-            attendanceMap[r.student_name].weeks[r.week_start] = count;
-            attendanceMap[r.student_name].total += count;
+            attendanceMap[r.student_id ?? r.student_name].weeks[r.week_start] = (attendanceMap[r.student_id ?? r.student_name].weeks[r.week_start] || 0) + count;
+            attendanceMap[r.student_id ?? r.student_name].total += count;
         });
 
         // 3. Build CSV
-        let csv = 'Student Name,' + weeks.map(w => `W/C ${formatCsvDate(w)}`).join(',') + ',Total Sessions Attended\n';
+        let csv = 'Student Name,' + weeks.map(w => `${activityScope === "event" ? "" : "W/C "}${formatCsvDate(w)}`).join(',') + `,Total ${activityScope === 'event' ? 'Events' : 'Sessions'} Attended\n`;
         
         // Sort students by name
-        const studentNames = Object.keys(attendanceMap).sort();
+        const studentNames = Object.keys(attendanceMap).sort((a,b) => attendanceMap[a].name.localeCompare(attendanceMap[b].name));
         
         studentNames.forEach(name => {
             const data = attendanceMap[name];
             const weekCols = weeks.map(w => data.weeks[w] || 0).join(',');
-            csv += `"${name}",${weekCols},${data.total}\n`;
+            csv += `"${data.name.replaceAll('"', '""')}",${weekCols},${data.total}\n`;
         });
 
         const blob = new Blob([csv], { type: 'text/csv' });
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = filename;
+        a.download = `${activityScope === 'whole_school' ? 'archived_whole_school' : activityScope}_${filename}`;
         a.click();
     }
 
@@ -506,6 +569,7 @@
         const count = selectedStudentIds.size;
         massDeleteBtn.disabled = count === 0;
         massAddToActivityBtn.disabled = count === 0;
+        massAddToActivityBtn.hidden = activityScope !== 'normal';
         selectedCountText.textContent = `${count} student${count !== 1 ? 's' : ''} selected`;
     }
 
@@ -558,6 +622,7 @@
         
         const ids = Array.from(selectedStudentIds);
         const res = await api('delete_students', 'POST', { ids: ids.join(',') });
+        if (res.stale) return;
         if (res.error) return alert(res.error);
         
         await loadState();
@@ -567,7 +632,7 @@
     massAddToActivityBtn.addEventListener('click', () => {
         addToActivityModal.classList.add('active');
         targetActivitySelect.innerHTML = '<option value="">-- Select Activity --</option>';
-        state.activities.forEach(a => {
+        state.activities.filter(a => !Number(a.all_students_mandatory)).forEach(a => {
             const opt = document.createElement('option');
             opt.value = a.id;
             opt.textContent = a.name;
@@ -589,6 +654,7 @@
         selectedStudentIds.forEach(id => currentIds.add(id));
         
         const newIds = Array.from(currentIds);
+        if (activity.scope === 'whole_school' && newIds.some(id => !state.students.some(student => student.id == id && activity.year_groups.includes(Number(student.year_group))))) return alert('Only students in the activity’s eligible years can be assigned.');
         
         const res = await api('update_activity', 'POST', {
             id: activity.id,
@@ -597,6 +663,7 @@
             sessions_per_week: activity.sessions_per_week,
             student_ids: newIds.join(',')
         });
+        if (res.stale) return;
 
         if (res.error) return alert(res.error);
 
@@ -617,10 +684,100 @@
 
     async function loadAttendance() {
         if (!selectedActivity) return;
-        const res = await api('get_attendance', 'GET', { activity_id: selectedActivity, week_start: selectedWeekStart });
+        const requestedActivity = selectedActivity;
+        const requestedWeek = activityScope === 'whole_school' ? archiveWeek : selectedWeekStart;
+        const res = await api('get_attendance', 'GET', { activity_id: selectedActivity, week_start: activityScope === 'whole_school' ? archiveWeek : selectedWeekStart });
+        if (res.stale) return;
+        if (requestedActivity !== selectedActivity || requestedWeek !== (activityScope === 'whole_school' ? archiveWeek : selectedWeekStart)) return;
+        if (res.error) return alert(res.error);
         state.attendance = res.attendance || {};
         renderRegister();
     }
+
+    const allStudentsMandatory = q('#allStudentsMandatory');
+    const formYears = () => [...document.querySelectorAll('[name="eligible_year"]:checked')].map(el => Number(el.value));
+    const eligibleForForm = student => activityScope !== 'whole_school' || formYears().includes(Number(student.year_group));
+    const eligibleForActivity = student => {
+        const activity = state.activities.find(a => a.id == selectedActivity);
+        return activity?.scope !== 'whole_school' || activity.year_groups.includes(Number(student.year_group));
+    };
+    function refreshSchoolForm() {
+        const automatic = activityScope === 'whole_school' && allStudentsMandatory.checked;
+        q('#automaticRosterHelp').hidden = !automatic;
+        activityHasMandatoryInput.disabled = automatic;
+        q('#activityStudentTags').parentElement.hidden = automatic;
+        currentActivityStudentIds = currentActivityStudentIds.filter(id => state.students.some(student => student.id == id && eligibleForForm(student)));
+        renderStudentTags();
+        renderStudentPicker();
+    }
+    const eventForm = window.EventForm.mount(q('#eventFields'));
+    function configureSchoolForm(activity = null) {
+        const event = activityScope === 'event';
+        q('label[for=activityNameInput]').textContent = event ? 'Name' : 'Activity Name';
+        q('#wholeSchoolOptions').hidden = true;
+        q('#eventFields').hidden = !event;
+        q('#recurringSessionField').hidden = event;
+        activityHasMandatoryInput.closest('.form-group').hidden = event;
+        activityHasMandatoryInput.disabled = false;
+        q('#activityStudentTags').parentElement.hidden = event;
+        eventForm.setRequired(event);
+        if (event) eventForm.set(activity, state.students, state.today);
+    }
+    async function switchScope(scope) {
+        if (csvBusy) return;
+        viewGeneration++;
+        activityScope = scope;
+        const event = scope !== 'normal';
+        q('#activityScopeSwitch').dataset.events = String(event);
+        q('#activityScopeSwitch').querySelectorAll('button').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.scope === (event ? 'event' : 'normal'))));
+        q('#activityWeekSection').hidden = event;
+        q('#archiveControls').hidden = scope !== 'whole_school';
+        q('#registerKeyboardHints').hidden = scope === 'whole_school';
+        q('#recurringSessionHint').hidden = event;
+        addActivityBtn.style.display = scope === 'whole_school' ? 'none' : '';
+        addActivityBtn.textContent = scope === 'event' ? '+ New Event' : '+ New Activity';
+        navSettings.style.display = scope === 'whole_school' ? 'none' : '';
+        document.querySelectorAll('[data-activity-label]').forEach(el => {
+            el.textContent = scope === 'event' ? el.dataset.eventLabel : el.dataset.activityLabel;
+        });
+        q('#activityScopeLabel').textContent = scopeLabel();
+        q('#mobileNavToggle').textContent = `${scopeLabel()} · Menu`;
+        closeModal();
+        selectedActivity = null;
+        state.activities = [];
+        state.attendance = {};
+        statsData = null;
+        currentRegisterStudents = [];
+        currentStatsStudent = null;
+        currentStatsActivity = null;
+        selectedStudentIds.clear();
+        registerArea.style.display = 'block';
+        statsArea.style.display = 'none';
+        settingsArea.style.display = 'none';
+        navStats.classList.remove('active');
+        navSettings.classList.remove('active');
+        editActivityBtn.style.display = 'none';
+        assignStudentBtn.style.display = 'none';
+        createStudentBtn.style.display = 'none';
+        editActivityBtn.title = scope === 'event' ? 'Edit Event' : 'Edit Activity';
+        activityTitle.textContent = scopeLabel();
+        activityDescription.textContent = '';
+        registerArea.textContent = 'Loading…';
+        renderActivities();
+        await loadState();
+    }
+    q('#activityScopeSwitch')?.addEventListener('click', e => {
+        const button = e.target.closest('button[data-scope]');
+        if (button) switchScope(button.dataset.scope);
+    });
+    q('#activityScopeSwitch')?.addEventListener('keydown', e => {
+        if (!['ArrowLeft','ArrowRight','Home','End'].includes(e.key)) return;
+        e.preventDefault();
+        const scope = ['ArrowLeft','Home'].includes(e.key) ? 'normal' : 'event';
+        q(`#activityScopeSwitch [data-scope="${scope}"]`).focus();
+        switchScope(scope);
+    });
+    q('#archiveWeek').addEventListener('change', e => { archiveWeek = e.target.value; loadAttendance(); });
 
     // Tag Management Logic
     let currentActivityStudentIds = [];
@@ -655,7 +812,7 @@
 
     function renderStudentPicker(filter = '') {
         studentPickerList.innerHTML = '';
-        const available = state.students.filter(s => !currentActivityStudentIds.includes(s.id));
+        const available = state.students.filter(s => !currentActivityStudentIds.includes(s.id) && eligibleForForm(s));
         const filtered = available.filter(s => s.name.toLowerCase().includes(filter.toLowerCase()));
 
         if (filtered.length === 0) {
@@ -670,36 +827,15 @@
             item.onclick = () => {
                 currentActivityStudentIds.push(s.id);
                 renderStudentTags();
-                studentPickerDropdown.style.display = 'none';
+                activityPicker.close();
                 studentPickerSearch.value = '';
             };
             studentPickerList.appendChild(item);
         });
     }
 
-    addStudentTagBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const rect = addStudentTagBtn.getBoundingClientRect();
-        // Position dropdown relative to button or container
-        // Simple toggle for now
-        const isVisible = studentPickerDropdown.style.display === 'flex';
-        studentPickerDropdown.style.display = isVisible ? 'none' : 'flex';
-        if (!isVisible) {
-            renderStudentPicker();
-            studentPickerSearch.focus();
-        }
-    });
-
-    studentPickerSearch.addEventListener('input', (e) => {
-        renderStudentPicker(e.target.value);
-    });
-
-    // Close picker when clicking outside
-    document.addEventListener('click', (e) => {
-        if (!studentPickerDropdown.contains(e.target) && e.target !== addStudentTagBtn) {
-            studentPickerDropdown.style.display = 'none';
-        }
-    });
+    const activityPicker = window.StudentPicker.attach(studentPickerDropdown, addStudentTagBtn, () => renderStudentPicker(studentPickerSearch.value));
+    studentPickerSearch.addEventListener('input', e => renderStudentPicker(e.target.value));
 
     // --- Assign Student Modal Logic ---
     let assignStudentIds = [];
@@ -755,7 +891,7 @@
 
     function renderAssignPicker(filter = '') {
         assignStudentList.innerHTML = '';
-        const available = state.students.filter(s => !assignStudentIds.includes(s.id));
+        const available = state.students.filter(s => !assignStudentIds.includes(s.id) && eligibleForActivity(s));
         const filtered = available.filter(s => s.name.toLowerCase().includes(filter.toLowerCase()));
 
         if (filtered.length === 0) {
@@ -824,9 +960,9 @@
             item.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const yg = parseInt(item.dataset.yg);
-                const ygStudents = state.students.filter(s => s.year_group == yg);
+                const ygStudents = state.students.filter(s => s.year_group == yg && eligibleForActivity(s));
                 ygStudents.forEach(s => {
-                    if (!assignStudentIds.includes(s.id)) {
+                    if (!assignStudentIds.includes(s.id) && eligibleForActivity(s)) {
                         assignStudentIds.push(s.id);
                     }
                 });
@@ -892,8 +1028,8 @@
             return;
         }
         const act = state.activities.find(x => x.id == selectedActivity);
-        const sessions = act.sessions_per_week;
-        const showMandatory = (act.has_mandatory === undefined) ? true : !!parseInt(act.has_mandatory, 10);
+        const sessions = activityScope === 'event' ? 1 : act.sessions_per_week;
+        const showMandatory = !!Number(act.all_students_mandatory) || (act.has_mandatory === undefined ? true : !!Number(act.has_mandatory));
         currentRegisterHasMandatory = showMandatory;
 
         // Filter students based on activity association
@@ -901,7 +1037,7 @@
         // Let's assume if the array exists, we filter. If it's missing, we show all (backward compat)
         // But we just added it to DB, so it will be empty array for existing activities.
         // User wants "only shows certain students". So empty array = no students.
-        const activityStudents = (act.student_ids || []).map(id => state.students.find(s => s.id == id)).filter(Boolean);
+        const activityStudents = activityScope === 'event' ? act.participants.filter(p => Number(p.active) || showEventHistory) : (act.student_ids || []).map(id => state.students.find(s => s.id == id)).filter(Boolean);
 
         // Sort by name
         activityStudents.sort((a, b) => a.name.localeCompare(b.name));
@@ -915,7 +1051,7 @@
         table.className = 'students-table';
         const thead = document.createElement('thead');
         const headRow = document.createElement('tr');
-        headRow.innerHTML = `<th>Student</th>` + (showMandatory ? `<th>Mandatory</th>` : ``) + Array.from({ length: sessions }).map((_, i) => `<th>Session ${i + 1}</th>`).join('');
+        headRow.innerHTML = `<th>Student</th>` + (showMandatory ? `<th>Mandatory</th>` : ``) + Array.from({ length: sessions }).map((_, i) => `<th>${activityScope === 'event' ? 'Attended' : 'Session '+(i + 1)}</th>`).join('');
         thead.appendChild(headRow); table.appendChild(thead);
         const tbody = document.createElement('tbody');
 
@@ -947,11 +1083,14 @@
             editBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>';
             editBtn.style.opacity = '0.5';
             editBtn.style.padding = '4px';
-            editBtn.onclick = (e) => { e.stopPropagation(); openEditStudentModal(s, { context: 'activity' }); };
+            editBtn.onclick = (e) => { e.stopPropagation(); if (activityScope === 'event') { openEventNotes(act, s); } else openEditStudentModal(s, { context: 'activity' }); };
             editBtn.onmouseover = () => editBtn.style.opacity = '1';
             editBtn.onmouseout = () => editBtn.style.opacity = '0.5';
 
-            wrapper.appendChild(editBtn);
+            editBtn.title = activityScope === 'event' ? 'Edit student notes' : 'Edit student';
+            if (activityScope !== 'whole_school') wrapper.appendChild(editBtn);
+            else if (act.student_meta?.[String(s.id)]?.note) { const note = document.createElement('small'); note.textContent = act.student_meta[String(s.id)].note; wrapper.appendChild(note); }
+            if (activityScope === 'event' && !Number(s.active)) nameSpan.textContent += ' (historical)';
             nameTd.appendChild(wrapper);
             tr.appendChild(nameTd);
             const meta = (act.student_meta && act.student_meta[String(s.id)]) ? act.student_meta[String(s.id)] : null;
@@ -961,7 +1100,8 @@
                 const mandatoryTd = document.createElement('td');
                 const mandatoryCb = document.createElement('input');
                 mandatoryCb.type = 'checkbox';
-                mandatoryCb.checked = !!(meta && meta.mandatory);
+                mandatoryCb.checked = !!Number(act.all_students_mandatory) || !!(meta && meta.mandatory);
+                mandatoryCb.disabled = activityScope !== 'normal' || !!Number(act.all_students_mandatory);
                 mandatoryCb.addEventListener('change', async () => {
                     const existingNote = (meta && typeof meta.note === 'string') ? meta.note : '';
                     const ok = await updateActivityStudentMeta(selectedActivity, s.id, { mandatory: mandatoryCb.checked ? 1 : 0, note: existingNote });
@@ -980,6 +1120,8 @@
                 cb.type = 'checkbox';
                 const present = state.attendance[s.id] && state.attendance[s.id][si] === 1;
                 cb.checked = !!present;
+                cb.disabled = activityScope === 'whole_school';
+                cb.setAttribute('aria-label', `${s.name}: attended`);
                 cb.addEventListener('change', () => toggleAttendance(s.id, si, cb.checked));
                 td.appendChild(cb);
                 tr.appendChild(td);
@@ -988,22 +1130,51 @@
         });
         table.appendChild(tbody);
         registerArea.innerHTML = '';
+        if (activityScope === 'event' && act.participants.some(p => !Number(p.active))) {
+            const history = document.createElement('button'); history.className = 'btn event-history-control';
+            history.textContent = showEventHistory ? 'Hide historical participants' : 'Show historical participants';
+            history.onclick = () => { showEventHistory = !showEventHistory; renderRegister(); };
+            registerArea.appendChild(history);
+        }
         registerArea.appendChild(table);
     }
 
     async function toggleAttendance(student_id, session_index, present) {
-        await api('toggle_attendance', 'POST', { student_id, activity_id: selectedActivity, week_start: selectedWeekStart, session_index, present: present ? 1 : 0 });
+        const requestedActivity = selectedActivity;
+        const requestedWeek = selectedWeekStart;
+        const res = await api('toggle_attendance', 'POST', { student_id, activity_id: selectedActivity, week_start: selectedWeekStart, session_index, present: present ? 1 : 0 });
+        if (res.stale || requestedActivity !== selectedActivity || requestedWeek !== selectedWeekStart) return;
+        if (res.error) { alert(res.error); await loadAttendance(); return; }
         if (!state.attendance[student_id]) state.attendance[student_id] = {};
         state.attendance[student_id][session_index] = present ? 1 : 0;
     }
+
+    let eventNoteTarget = null;
+    function openEventNotes(activity, student) {
+        eventNoteTarget = { activity, student };
+        q('#eventNoteTitle').textContent = `${student.name} — Event notes`;
+        q('#eventNoteText').value = activity.student_meta[String(student.id)]?.note || '';
+        openModal(q('#eventNoteModal'));
+        q('#eventNoteText').focus();
+    }
+    q('#eventNoteForm').addEventListener('submit', async e => {
+        e.preventDefault();
+        if (!eventNoteTarget) return;
+        const {activity, student} = eventNoteTarget;
+        q('#saveEventNote').disabled = true;
+        try {
+            if (await updateActivityStudentMeta(activity.id, student.id, {note: q('#eventNoteText').value, mandatory: student.mandatory})) closeModal(q('#eventNoteModal'));
+        } finally { q('#saveEventNote').disabled = false; }
+    });
 
     async function updateActivityStudentMeta(activity_id, student_id, { mandatory, note }) {
         const res = await api('update_activity_student', 'POST', {
             activity_id,
             student_id,
-            mandatory: mandatory ? 1 : 0,
+            ...(activityScope === 'event' || Number(state.activities.find(a => a.id == activity_id)?.all_students_mandatory) ? {} : { mandatory: mandatory ? 1 : 0 }),
             note: note ?? ''
         });
+        if (res.stale) return;
         if (res && res.ok) {
             const act = state.activities.find(x => x.id == activity_id);
             if (act) {
@@ -1027,18 +1198,13 @@
 
         if (!name) return;
 
-        // Pass student_ids as comma separated string
-        const studentIdsStr = currentActivityStudentIds.join(',');
-
+        const fields = activityScope === 'event' ? eventForm.get() : { sessions_per_week: sessions, has_mandatory, student_ids: currentActivityStudentIds.join(',') };
+        saveActivityBtn.disabled = true;
         let res;
-        if (id) {
-            // Update
-            res = await api('update_activity', 'POST', { id, name, description, department, sessions_per_week: sessions, has_mandatory, student_ids: studentIdsStr });
-        } else {
-            // Create
-            res = await api('create_activity', 'POST', { name, description, department, sessions_per_week: sessions, has_mandatory, student_ids: studentIdsStr });
-        }
+        try { res = await api(id ? 'update_activity' : 'create_activity', 'POST', { ...(id ? {id} : {}), name, description, department, ...fields }); }
+        finally { saveActivityBtn.disabled = false; }
 
+        if (res.stale) return;
         if (res.ok) {
             closeModal(activityModal);
             await loadState();
@@ -1056,6 +1222,7 @@
         if (!confirm('Are you sure you want to delete this activity? All attendance data will be lost.')) return;
 
         const res = await api('delete_activity', 'POST', { id });
+        if (res.stale) return;
         if (res.ok) {
             closeModal(activityModal);
             selectedActivity = null;
@@ -1083,8 +1250,8 @@
         activityDescriptionInput.value = '';
         activitySessionsInput.value = '1';
         if (activityHasMandatoryInput) activityHasMandatoryInput.checked = true;
-        activityModalTitle.textContent = 'New Activity';
-        saveActivityBtn.textContent = 'Create Activity';
+        activityModalTitle.textContent = activityScope === 'event' ? 'New Event' : 'New Activity';
+        saveActivityBtn.textContent = activityScope === 'event' ? 'Create Event' : 'Create Activity';
         deleteActivityBtn.style.display = 'none';
 
         selectedDepartments.clear();
@@ -1092,8 +1259,10 @@
         renderDepartmentSelector();
 
         currentActivityStudentIds = [];
+        configureSchoolForm();
         renderStudentTags();
 
+        closeMobileNavigation();
         openModal(activityModal);
     }
 
@@ -1108,7 +1277,7 @@
         activityDescriptionInput.value = act.description || '';
         activitySessionsInput.value = act.sessions_per_week;
         if (activityHasMandatoryInput) activityHasMandatoryInput.checked = (act.has_mandatory === undefined) ? true : !!parseInt(act.has_mandatory, 10);
-        activityModalTitle.textContent = 'Edit Activity';
+        activityModalTitle.textContent = activityScope === 'event' ? 'Edit Event' : 'Edit Activity';
         saveActivityBtn.textContent = 'Save Changes';
         deleteActivityBtn.style.display = can.admin ? 'block' : 'none';
 
@@ -1121,12 +1290,15 @@
         renderDepartmentSelector();
 
         currentActivityStudentIds = [...(act.student_ids || [])];
+        configureSchoolForm(act);
         renderStudentTags();
 
+        closeMobileNavigation();
         openModal(activityModal);
     }
 
     function closeModal(modal) {
+        if (typeof csvBusy !== 'undefined' && csvBusy && (!modal || modal === csvImportModal)) return;
         // If no modal passed, close all active ones
         if (!modal) {
             document.querySelectorAll('.modal-overlay.active').forEach(m => closeModal(m));
@@ -1143,6 +1315,17 @@
         if (form) form.reset();
     }
 
+    const studentCharacteristicFields = ['pp', 'fsm_ever', 'gender', 'sen_status'];
+    function setStudentCharacteristics(student) {
+        studentCharacteristicFields.forEach(field => {
+            const control = q(`#student_${field}`);
+            control.value = student[field] == null ? '' : String(student[field]);
+            control.disabled = false;
+        });
+    }
+    function studentCharacteristics() {
+        return Object.fromEntries(studentCharacteristicFields.map(field => [field, q(`#student_${field}`).value]));
+    }
     function openCreateStudentModal() {
         if (!can.admin) return;
         studentIdInput.value = '';
@@ -1151,6 +1334,8 @@
         firstNameInput.value = '';
         lastNameInput.value = '';
         studentYearGroup.value = '9';
+        setStudentCharacteristics({});
+        uploadCsvLink.parentElement.hidden = !can.admin;
         if (studentMandatoryInput) studentMandatoryInput.checked = false;
         if (studentNoteInput) studentNoteInput.value = '';
         studentModalTitle.textContent = 'Add New Student';
@@ -1178,14 +1363,19 @@
         firstNameInput.value = parts[0] || '';
         lastNameInput.value = parts.slice(1).join(' ') || '';
         studentYearGroup.value = student.year_group || '9';
+        setStudentCharacteristics(student);
+        uploadCsvLink.parentElement.hidden = true;
 
         if (isActivityContext) {
             const act = state.activities.find(x => x.id == selectedActivity);
             const meta = (act && act.student_meta && act.student_meta[String(student.id)]) ? act.student_meta[String(student.id)] : null;
-            if (studentMandatoryInput) studentMandatoryInput.checked = !!(meta && meta.mandatory);
+            if (studentMandatoryInput) {
+                studentMandatoryInput.checked = !!Number(act.all_students_mandatory) || !!(meta && meta.mandatory);
+                studentMandatoryInput.disabled = !!Number(act.all_students_mandatory);
+            }
             if (studentNoteInput) studentNoteInput.value = (meta && typeof meta.note === 'string') ? meta.note : '';
 
-            const showMandatory = (act && act.has_mandatory === undefined) ? true : !!parseInt(act.has_mandatory, 10);
+            const showMandatory = !!Number(act.all_students_mandatory) || !!Number(act.has_mandatory);
             document.querySelectorAll('.activity-mandatory').forEach(el => el.style.display = showMandatory ? 'flex' : 'none');
         } else {
             if (studentMandatoryInput) studentMandatoryInput.checked = false;
@@ -1199,6 +1389,7 @@
         firstNameInput.disabled = !canEditStudentRecord;
         lastNameInput.disabled = !canEditStudentRecord;
         studentYearGroup.disabled = !canEditStudentRecord;
+        studentCharacteristicFields.forEach(field => q(`#student_${field}`).disabled = !canEditStudentRecord);
 
         studentModalTitle.textContent = isActivityContext ? 'Edit Student (This Activity)' : 'Edit Student';
         saveStudentBtn.textContent = 'Save Changes';
@@ -1232,7 +1423,7 @@
             has_mandatory: hasMandatory,
             student_ids: assignStudentIds.join(',')
         });
-
+        if (res.stale) return;
         if (res.ok) {
             closeModal(assignStudentModal);
             await loadState();
@@ -1276,9 +1467,10 @@
 
     async function openStudentStats(student) {
         currentStatsStudent = student;
-        studentStatsTitle.textContent = student.name;
+        studentStatsTitle.textContent = `${student.name} — ${scopeLabel()}`;
 
         const res = await api('get_student_stats', 'GET', { id: student.id });
+        if (res.stale) return;
         if (res.error) return alert(res.error);
         const stats = res.stats;
 
@@ -1307,7 +1499,7 @@
             div.innerHTML = `
             <div style="display:flex; justify-content:space-between; color:var(--text-secondary); font-size:11px; margin-bottom:2px;">
                 <span>${h.week_start}</span>
-                <span>Session ${h.session_index}</span>
+                <span>${activityScope === 'event' ? 'Attended' : 'Session '+h.session_index}</span>
             </div>
             <div>${h.activity_name}</div>
           `;
@@ -1320,6 +1512,7 @@
     downloadStudentCsvBtn.addEventListener('click', async () => {
         if (!currentStatsStudent) return;
         const res = await api('get_student_stats', 'GET', { id: currentStatsStudent.id });
+        if (res.stale) return;
         const stats = res.stats;
 
         let csv = `Title,Value\n`;
@@ -1328,9 +1521,9 @@
         // Activities Part Of
         const inActivities = state.activities.filter(a => (a.student_ids || []).includes(currentStatsStudent.id));
         const actNames = inActivities.map(a => a.name).join(', ');
-        csv += `Activities Part Of,"${actNames}"\n`;
+        csv += `Selected ${activityScope === 'event' ? 'Events' : 'Activities'},"${actNames}"\n`;
         
-        csv += `Total Sessions,${stats.total}\n`;
+        csv += `Total ${activityScope === 'event' ? 'Events' : 'Sessions'},${stats.total}\n`;
 
         // Group history by week
         const weeklyData = {};
@@ -1347,14 +1540,14 @@
             const activities = Object.entries(weeklyData[w])
                 .map(([name, count]) => `${name} * ${count}`)
                 .join(', ');
-            csv += `W/C ${formatCsvDate(w)},"${activities}"\n`;
+            csv += `${activityScope === "event" ? "" : "W/C "}${formatCsvDate(w)},"${activities}"\n`;
         });
 
         const blob = new Blob([csv], { type: 'text/csv' });
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `${currentStatsStudent.name.replace(/\s+/g, '_')}_report.csv`;
+        a.download = `${activityScope === 'whole_school' ? 'archived_whole_school' : activityScope}_${currentStatsStudent.name.replace(/\s+/g, '_')}_report.csv`;
         a.click();
     });
 
@@ -1371,9 +1564,10 @@
         const act = state.activities.find(a => a.id == activityId);
         if (!act) return;
         currentStatsActivity = act;
-        activityStatsTitle.textContent = act.name;
+        activityStatsTitle.textContent = `${act.name} — ${scopeLabel()}`;
 
         const res = await api('get_activity_stats', 'GET', { id: act.id });
+        if (res.stale) return;
         if (res.error) return alert(res.error);
         const stats = res.stats;
 
@@ -1422,6 +1616,7 @@
     downloadActivityCsvBtn.addEventListener('click', async () => {
         if (!currentStatsActivity) return;
         const res = await api('get_activity_export', 'GET', { id: currentStatsActivity.id });
+        if (res.stale) return;
         if (res.error) return alert(res.error);
         
         const rawData = res.data;
@@ -1434,34 +1629,35 @@
         // 2. Map attendance data
         const attendanceMap = {};
         rawData.forEach(r => {
-            if (!attendanceMap[r.student_name]) {
-                attendanceMap[r.student_name] = {
+            if (!attendanceMap[r.student_id ?? r.student_name]) {
+                attendanceMap[r.student_id ?? r.student_name] = {
+                    name: r.student_name,
                     weeks: {},
                     total: 0
                 };
             }
             const count = parseInt(r.count);
-            attendanceMap[r.student_name].weeks[r.week_start] = count;
-            attendanceMap[r.student_name].total += count;
+            attendanceMap[r.student_id ?? r.student_name].weeks[r.week_start] = (attendanceMap[r.student_id ?? r.student_name].weeks[r.week_start] || 0) + count;
+            attendanceMap[r.student_id ?? r.student_name].total += count;
         });
 
         // 3. Build CSV
-        let csv = 'Student Name,' + weeks.map(w => `W/C ${formatCsvDate(w)}`).join(',') + ',Total Sessions Attended\n';
+        let csv = 'Student Name,' + weeks.map(w => `${activityScope === "event" ? "" : "W/C "}${formatCsvDate(w)}`).join(',') + `,Total ${activityScope === 'event' ? 'Events' : 'Sessions'} Attended\n`;
         
         // Sort students by name
-        const studentNames = Object.keys(attendanceMap).sort();
+        const studentNames = Object.keys(attendanceMap).sort((a,b) => attendanceMap[a].name.localeCompare(attendanceMap[b].name));
         
         studentNames.forEach(name => {
             const data = attendanceMap[name];
             const weekCols = weeks.map(w => data.weeks[w] || 0).join(',');
-            csv += `"${name}",${weekCols},${data.total}\n`;
+            csv += `"${data.name.replaceAll('"', '""')}",${weekCols},${data.total}\n`;
         });
 
         const blob = new Blob([csv], { type: 'text/csv' });
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `${currentStatsActivity.name.replace(/\s+/g, '_')}_report.csv`;
+        a.download = `${activityScope === 'whole_school' ? 'archived_whole_school' : activityScope}_${currentStatsActivity.name.replace(/\s+/g, '_')}_report.csv`;
         a.click();
     });
 
@@ -1472,12 +1668,12 @@
 
         if (!term) {
             const tr = document.createElement('tr');
-            tr.innerHTML = `<td colspan="3" style="text-align:center; padding: 20px; color: var(--text-secondary);">${state.students.length} students. Type to search.</td>`;
+            tr.innerHTML = `<td colspan="3" style="text-align:center; padding: 20px; color: var(--text-secondary);">${reportStudents().length} students. Type to search.</td>`;
             statsTable.appendChild(tr);
             return;
         }
 
-        state.students.forEach(s => {
+        reportStudents().forEach(s => {
             if (!s.name.toLowerCase().includes(term)) return;
 
             const attended = statsData.students[s.id] || 0;
@@ -1548,7 +1744,7 @@
             data: {
                 labels: actLabels,
                 datasets: [{
-                    label: 'Sessions',
+                    label: activityScope === 'event' ? 'Events' : 'Sessions',
                     data: actCounts,
                     backgroundColor: [
                         '#007aff', '#34c759', '#ff9500', '#ff3b30', '#5856d6', '#af52de'
@@ -1594,13 +1790,14 @@
 
         let res;
         if (id) {
-            const payload = { id, name: fullName, year_group: yearGroup };
+            const payload = { id, name: fullName, year_group: yearGroup, ...studentCharacteristics() };
             if (!can.admin && activityId) payload.activity_id = activityId;
             res = await api('update_student', 'POST', payload);
         } else {
-            res = await api('create_student', 'POST', { name: fullName, year_group: yearGroup });
+            res = await api('create_student', 'POST', { name: fullName, year_group: yearGroup, ...studentCharacteristics() });
         }
 
+        if (res.stale) return;
         if (res.ok) {
             closeModal(studentModal);
             await loadState();
@@ -1619,6 +1816,7 @@
         if (!confirm('Are you sure you want to delete this student? All their attendance data will be lost.')) return;
 
         const res = await api('delete_student', 'POST', { id });
+        if (res.stale) return;
         if (res.ok) {
             closeModal(studentModal);
             await loadState();
@@ -1671,8 +1869,8 @@
 
     // keyboard navigation
     window.addEventListener('keydown', e => {
-        const table = document.querySelector('.students-table');
-        if (!table) return;
+        const table = registerArea.querySelector('.students-table');
+        if (!table || registerArea.style.display === 'none' || activityScope === 'whole_school' || document.querySelector('.modal-overlay.active')) return;
         // Only capture navigation keys if we aren't in an input or textarea
         if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
 
@@ -1691,7 +1889,7 @@
             const cb = inputs[offset];
             if (cb) { cb.checked = !cb.checked; cb.dispatchEvent(new Event('change')); }
         }
-        if (/^[1-7]$/.test(e.key)) {
+        if (activityScope === 'normal' && /^[1-7]$/.test(e.key)) {
             const si = parseInt(e.key, 10);
             const s = currentRegisterStudents[focusedRow];
             if (!s) return;
@@ -1708,116 +1906,102 @@
         }
     });
 
-    // CSV Upload Logic
+    // CSV decoding, explicit mapping and create-only confirmation.
     const uploadCsvLink = q('#uploadCsvLink');
     const csvUpload = q('#csvUpload');
-    const csvProgressContainer = q('#csvProgressContainer');
-    const csvProgressBar = q('#csvProgressBar');
-    const csvProgressText = q('#csvProgressText');
-
-    if (uploadCsvLink && csvUpload) {
-        uploadCsvLink.addEventListener('click', (e) => {
-            e.preventDefault();
-            csvUpload.click();
-        });
-
-        csvUpload.addEventListener('change', async (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            const text = await file.text();
-            const lines = text.split(/\r?\n/).map(line => line.trim()).filter(line => line);
-            let count = 0;
-            let current = 0;
-            const totalLines = lines.length;
-            const PROGRESS_UPDATE_INTERVAL = 5;
-            
-            if (csvProgressContainer) csvProgressContainer.style.display = 'block';
-
-            for (const line of lines) {
-                current++;
-                if (current % PROGRESS_UPDATE_INTERVAL === 0 || current === totalLines) {
-                    if (csvProgressBar) csvProgressBar.style.width = Math.round((current / totalLines) * 100) + '%';
-                    if (csvProgressText) csvProgressText.textContent = `${current} / ${totalLines}`;
-                }
-
-                // Remove quotes
-                let cleanLine = line.replace(/['"]/g, '');
-                
-                const parts = cleanLine.split(',').map(p => p.trim());
-                let yearGroup = 9;
-                let namePart = cleanLine;
-
-                // Check if last part is a year group
-                if (parts.length > 1) {
-                    const last = parts[parts.length - 1];
-                    const match = last.match(/(\d+)/);
-                    if (match) {
-                        const val = parseInt(match[1]);
-                        if (val >= 9 && val <= 13) {
-                            yearGroup = val;
-                            // Reconstruct name part from the rest
-                            namePart = parts.slice(0, -1).join(',');
-                        }
-                    }
-                }
-
-                // Capitalize function
-                const capitalize = (s) => {
-                    if (!s) return '';
-                    return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
-                };
-
-                let firstName = '';
-                let lastName = '';
-
-                // Parse Name
-                if (namePart.includes(',')) {
-                    const nParts = namePart.split(',');
-                    if (nParts.length >= 2) {
-                        lastName = nParts[0].trim();
-                        firstName = nParts[1].trim();
-                    }
-                } else {
-                    const nParts = namePart.split(/\s+/);
-                    if (nParts.length >= 2) {
-                        lastName = nParts[0];
-                        firstName = nParts.slice(1).join(' ');
-                    }
-                }
-
-                if (!firstName || !lastName) continue;
-
-                lastName = capitalize(lastName);
-                firstName = firstName.split(/\s+/).map(p => capitalize(p)).join(' ');
-
-                const fullName = `${firstName} ${lastName}`;
-
-                const res = await api('create_student', 'POST', { name: fullName, year_group: yearGroup });
-                if (res.ok) count++;
-            }
-
-            if (csvProgressContainer) {
-                const PROGRESS_BAR_HIDE_DELAY = 1000;
-                setTimeout(() => {
-                    csvProgressContainer.style.display = 'none';
-                    csvProgressBar.style.width = '0%';
-                    csvProgressText.textContent = '0 / 0';
-                }, PROGRESS_BAR_HIDE_DELAY);
-            }
-
-            if (count > 0) {
-                alert(`Successfully added ${count} students.`);
-                closeModal(studentModal);
-                await loadState();
-                await loadAttendance();
-            } else {
-                alert('No valid students found in CSV.');
-            }
-
-            csvUpload.value = ''; // Reset
+    const csvImportModal = q('#csvImportModal');
+    let csvRecords = [], csvConfig = null, csvRows = [], csvBusy = false;
+    function csvError(message) {
+        q('#csvImportError').textContent = message;
+        q('#csvImportError').hidden = !message;
+    }
+    function refreshCsvPreview() {
+        csvError('');
+        csvRows = [];
+        try {
+            csvRows = StudentCsv.mapRows(csvRecords, csvConfig);
+            q('#csvImportSummary').textContent = `${csvRows.length} new students will be created. Previewing the first ${Math.min(10, csvRows.length)}.`;
+        } catch (error) {
+            csvError(error.message);
+            q('#csvImportSummary').textContent = 'Check the column mapping.';
+        }
+        q('#confirmCsvImport').disabled = !csvRows.length || csvBusy;
+        const table = q('#csvPreview'); table.replaceChildren();
+        const headers = ['CSV row', 'Name', 'Year', 'PP', 'FSM', 'Gender', 'SEN'];
+        const thead = table.createTHead().insertRow();
+        headers.forEach(text => { const th = document.createElement('th'); th.textContent = text; thead.appendChild(th); });
+        const tbody = table.createTBody();
+        csvRows.slice(0, 10).forEach(row => {
+            const tr = tbody.insertRow();
+            [row.row_number, row.name, row.year_group, row.pp || 'Not recorded', row.fsm_ever || 'Not recorded', row.gender || 'Not recorded', row.sen_status === '' ? 'No needs' : (row.sen_status ?? 'Not recorded')].forEach(value => { tr.insertCell().textContent = value; });
         });
     }
+    function renderCsvMappings() {
+        q('#csvMappings').replaceChildren();
+        const count = Math.max(...csvRecords.map(row => row.cells.length));
+        for (const [field, label] of Object.entries(StudentCsv.fields)) {
+            const group = document.createElement('div'); group.className = 'form-group';
+            const title = document.createElement('label'); title.textContent = label; title.htmlFor = `csvMap_${field}`;
+            const select = document.createElement('select'); select.id = title.htmlFor;
+            select.add(new Option('Not mapped', '-1'));
+            for (let i = 0; i < count; i++) select.add(new Option(csvConfig.hasHeader ? `${i + 1}: ${csvRecords[0].cells[i] || 'Untitled'}` : `Column ${i + 1}`, String(i)));
+            select.value = String(csvConfig.mapping[field]);
+            select.addEventListener('change', () => {
+                csvConfig.mapping[field] = Number(select.value);
+                if (select.value !== '-1') {
+                    if (field === 'name') { csvConfig.mapping.first_name = -1; csvConfig.mapping.last_name = -1; }
+                    if (field === 'first_name' || field === 'last_name') csvConfig.mapping.name = -1;
+                }
+                renderCsvMappings();
+            });
+            group.append(title, select); q('#csvMappings').appendChild(group);
+        }
+        q('#csvHasHeader').checked = csvConfig.hasHeader;
+        q('#csvNameOrder').value = csvConfig.nameOrder;
+        refreshCsvPreview();
+    }
+    if (can.admin) uploadCsvLink.addEventListener('click', event => { event.preventDefault(); csvUpload.click(); });
+    if (can.admin) csvUpload.addEventListener('change', async event => {
+        const file = event.target.files[0];
+        if (!file) return;
+        try {
+            csvRecords = StudentCsv.parse(await file.text());
+            csvConfig = StudentCsv.infer(csvRecords);
+            closeModal(studentModal);
+            renderCsvMappings();
+            openModal(csvImportModal);
+        } catch (error) { alert(error.message); }
+        csvUpload.value = '';
+    });
+    q('#csvHasHeader').addEventListener('change', event => {
+        csvConfig = StudentCsv.infer(csvRecords, event.target.checked); renderCsvMappings();
+    });
+    q('#csvNameOrder').addEventListener('change', event => { csvConfig.nameOrder = event.target.value; refreshCsvPreview(); });
+    q('#csvImportForm').addEventListener('submit', async event => {
+        event.preventDefault();
+        if (!can.admin || csvBusy || !csvRows.length) return;
+        csvBusy = true; csvError('');
+        const controls = csvImportModal.querySelectorAll('button, input, select');
+        controls.forEach(control => control.disabled = true);
+        q('#confirmCsvImport').textContent = 'Importing…';
+        try {
+            const res = await api('import_students', 'POST', { rows: JSON.stringify(csvRows) });
+            if (res.stale) return;
+            if (res.error) { csvError(res.error); return; }
+            csvBusy = false;
+            closeModal(csvImportModal);
+            await loadState(); await loadAttendance();
+            alert(`Successfully created ${res.created} students.`);
+            csvRows = [];
+        } catch (error) {
+            csvError('Import response could not be received. Check the student list before retrying to avoid duplicates.');
+        } finally {
+            csvBusy = false;
+            controls.forEach(control => control.disabled = false);
+            q('#confirmCsvImport').textContent = 'Import students';
+            q('#confirmCsvImport').disabled = !csvRows.length;
+        }
+    });
 
     // theme
     function loadTheme() {

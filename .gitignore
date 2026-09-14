@@ -1,1 +1,8 @@
 .env
+
+# Local editor, OS and browser-check artifacts
+.idea/
+.DS_Store
+.playwright-cli/
+output/
+__pycache__/
