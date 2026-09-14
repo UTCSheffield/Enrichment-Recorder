@@ -50,7 +50,7 @@ This setup runs the application with Apache/PHP and a MySQL database.
 ```bash
 docker compose build app
 docker compose up -d db
-docker compose run --rm --no-deps app php scripts/migrate.php
+docker compose run --rm --no-deps app php scripts/migrate.php --initialize
 docker compose up -d app
 ```
 

@@ -7,6 +7,12 @@ App\Env::load(__DIR__ . '/../.env', false);
 $db = App\Database::getConnection(false);
 if (!$db->query("SELECT GET_LOCK('er_schema_migration', 30)")->fetchColumn()) throw new RuntimeException('Migration lock unavailable');
 try {
+    $tables = $db->query('SHOW TABLES')->fetchAll(PDO::FETCH_COLUMN);
+    $initializing = in_array('--initialize', $argv, true);
+    if (!in_array('students', $tables, true) && !($initializing && !$tables)) {
+        throw new RuntimeException('UPGRADE STOPPED: the selected database has no students table. No schema changes were made. Reconnect the original database/volume or restore the verified backup; do not initialise replacement tables over a production installation. Use --initialize only for a genuinely new, empty installation.');
+    }
+    if ($initializing && $tables) throw new RuntimeException('--initialize requires an entirely empty database. Use the normal migration for an existing installation.');
     require __DIR__ . '/legacy-schema.php';
     foreach ([
         'scope' => "VARCHAR(20) NOT NULL DEFAULT 'normal'",

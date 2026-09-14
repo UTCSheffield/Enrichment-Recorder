@@ -10,6 +10,23 @@ try:
     sql('DROP DATABASE IF EXISTS er_migration_history; CREATE DATABASE er_migration_history;')
     cmd('docker','compose','exec','-T','db','sh','-c','MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot -e "GRANT ALL ON er_migration_history.* TO \'$MYSQL_USER\'@\'%\';"')
     cmd('docker','compose','run','-d','--no-deps','--name',CONTAINER,'-e','DB_NAME=er_migration_history','app')
+    # An upgrade must never silently replace a missing production students table.
+    try:
+        cmd('docker','exec',CONTAINER,'php','scripts/migrate.php')
+        raise AssertionError('Empty production database accepted')
+    except subprocess.CalledProcessError as error:
+        assert 'UPGRADE STOPPED' in error.output
+    assert json.loads(cmd('docker','exec',CONTAINER,'php','scripts/database-fingerprint.php'))==[]
+    cmd('docker','exec',CONTAINER,'php','scripts/migrate.php','--initialize')
+    sql('USE er_migration_history; DROP TABLE students;')
+    missing_before=cmd('docker','exec',CONTAINER,'php','scripts/database-fingerprint.php')
+    try:
+        cmd('docker','exec',CONTAINER,'php','scripts/migrate.php')
+        raise AssertionError('Missing students silently replaced')
+    except subprocess.CalledProcessError as error:
+        assert 'UPGRADE STOPPED' in error.output
+    assert missing_before==cmd('docker','exec',CONTAINER,'php','scripts/database-fingerprint.php')
+    print('PASS: empty/missing-students upgrades stop without changes; explicit fresh installation works')
     for revision in ['aba7fc7','7b779e8','38ccfaa','d5049ef']:
         sql('DROP DATABASE er_migration_history; CREATE DATABASE er_migration_history;')
         with tempfile.TemporaryDirectory() as directory:

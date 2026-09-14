@@ -77,3 +77,11 @@ If a migration or verification fails, keep writes paused and investigate. MySQL 
 ## Non-Docker installation
 
 With writes paused and a verified SQL backup, install the new code, retain the original database configuration, and run `php scripts/migrate.php` from the project directory before serving the new code. The same fingerprint commands work directly with PHP. Ensure the CLI and web server use the same database environment; `.env` loading does not override existing environment variables. Configure `SUPER_ADMIN_PASSWORD` in the environment used by the PHP web process, and reload that process if needed.
+
+## Missing `enrichment_db.students` after an attempted upgrade
+
+The former short chat instructions listed independent commands, so the new app could start even after a failed migration. That is not a successful upgrade. The migration creates `students` as its first base-table operation; a missing table in the running application therefore cannot be explained by that migration having completed successfully against the same, unchanged database.
+
+After a verified backup, `sh scripts/upgrade.sh` is the guarded upgrade path. It compares the running app's actual MySQL server/database with the proposed migration target, requires the original students table, pauses the app, migrates, checks original-record fingerprints, and starts only after success. It deliberately stops when the original students table is absent; creating an empty replacement would hide the problem rather than recover student records.
+
+If the table is absent, reconnect the original database/Compose volume or restore the verified pre-upgrade backup into the intended database with writes paused. Which of these is appropriate depends on the production deployment; a browser screenshot cannot establish whether the volume was changed or data was lost. Do not use `--initialize` to repair production. That option now only permits a genuinely empty, new installation.
