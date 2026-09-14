@@ -1,14 +1,20 @@
 <?php
 // Explicit CLI migration. Never served over HTTP.
 if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
-require __DIR__ . '/../src/Env.php';
+require_once __DIR__ . '/../src/Env.php';
 require __DIR__ . '/../src/Database.php';
 App\Env::load(__DIR__ . '/../.env', false);
 $db = App\Database::getConnection(false);
 if (!$db->query("SELECT GET_LOCK('er_schema_migration', 30)")->fetchColumn()) throw new RuntimeException('Migration lock unavailable');
 try {
     $tables = $db->query('SHOW TABLES')->fetchAll(PDO::FETCH_COLUMN);
-    $initializing = in_array('--initialize', $argv, true);
+    $automatic = in_array('--initialize-if-empty', $argv, true);
+    // Startup only creates a fresh schema. Existing installations are never upgraded here.
+    if ($automatic && $tables) {
+        echo "Existing database left unchanged.\n";
+        return;
+    }
+    $initializing = $automatic || in_array('--initialize', $argv, true);
     if (!in_array('students', $tables, true) && !($initializing && !$tables)) {
         throw new RuntimeException('UPGRADE STOPPED: the selected database has no students table. No schema changes were made. Reconnect the original database/volume or restore the verified backup; do not initialise replacement tables over a production installation. Use --initialize only for a genuinely new, empty installation.');
     }

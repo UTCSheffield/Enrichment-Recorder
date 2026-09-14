@@ -8,8 +8,7 @@ Recurring Activities and one-time Events share the school directory and settings
 
 ```sh
 docker compose build app
-docker compose run --rm --no-deps app php scripts/migrate.php --initialize
-docker compose up -d app
+docker compose up -d --build
 ```
 
 Set `SUPER_ADMIN_PASSWORD` in `.env`, then recreate the app with `docker compose up -d app`. The password is passed through the container environment; `.env` is excluded from the application image.

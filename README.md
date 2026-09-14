@@ -49,9 +49,7 @@ This setup runs the application with Apache/PHP and a MySQL database.
 
 ```bash
 docker compose build app
-docker compose up -d db
-docker compose run --rm --no-deps app php scripts/migrate.php --initialize
-docker compose up -d app
+docker compose up -d --build
 ```
 
 4. Make sure that you reset the details in the .env for password and encryption key.
@@ -65,3 +63,5 @@ Student records now include editable PP, FSM Ever, gender (F/M/O), and SEN statu
 Super Admin can switch between **Activities | Events** above Statistics. Events use a required date and a single attendance mark; Activities retain weekly sessions. Past event registers keep participant snapshots. Existing whole-school records remain preserved read-only in storage; the archive navigation is currently hidden.
 
 Upgrading an older production checkout? Follow the [production upgrade checklist](docs/production-upgrade.md). Do not start the new app before running its explicit migration.
+
+On Docker startup, the app waits for MySQL and automatically creates the complete schema only when the configured database contains no tables. Existing databases are left unchanged and still require the explicit upgrade procedure. Resetting this project’s database volume therefore needs no manual initialization command. CLI diagnostics do not trigger initialization.

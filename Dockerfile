@@ -14,3 +14,6 @@ COPY . /var/www/html/
 
 # Set permissions
 RUN chown -R www-data:www-data /var/www/html
+
+ENTRYPOINT ["sh", "/var/www/html/scripts/docker-entrypoint.sh"]
+CMD ["apache2-foreground"]
