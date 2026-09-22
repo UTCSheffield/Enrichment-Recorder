@@ -90,6 +90,10 @@ class Auth {
         return null;
     }
 
+    public static function backupToken(): string {
+        return hash_hmac('sha256', 'backup:' . ($_COOKIE[self::COOKIE_NAME] ?? ''), getenv('AUTH_SECRET') ?: '');
+    }
+
     public static function logout(): void {
         self::clearCookie();
     }

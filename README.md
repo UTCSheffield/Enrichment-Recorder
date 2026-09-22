@@ -26,7 +26,7 @@ Below are example screenshots of the application in action:
 ## Password Roles
 When you open the site, you’ll be prompted for a password. The password you enter determines your role:
 
-- **Super Admin** (`SUPER_ADMIN_PASSWORD`): all Admin features plus one-time Events with eligible/mandatory years and individual attendance overrides, and a read-only whole-school archive.
+- **Super Admin** (`SUPER_ADMIN_PASSWORD`): all Admin features plus one-time Events with eligible/mandatory years and individual attendance overrides, a read-only whole-school archive, and complete data backup/restore in Settings.
 - **Admin** (`ADMIN_PASSWORD`): full access (Statistics + Settings + student management).
 - **Head of Subject** (`HEAD_OF_SUBJECT_PASSWORD`): can create/edit activities, assign students to activities, and mark attendance.
 - **Teacher** (`TEACHER_PASSWORD`): can mark attendance and assign students to existing activities.
@@ -65,3 +65,13 @@ Super Admin can switch between **Activities | Events** above Statistics. Events 
 Upgrading an older production checkout? Follow the [production upgrade checklist](docs/production-upgrade.md). Do not start the new app before running its explicit migration.
 
 On Docker startup, the app waits for MySQL and automatically creates the complete schema only when the configured database contains no tables. Existing databases are left unchanged and still require the explicit upgrade procedure. Resetting this project’s database volume therefore needs no manual initialization command. CLI diagnostics do not trigger initialization.
+
+## Complete backups (Super Admin only)
+
+Open **Settings** and click **Backup** to download a JSON snapshot of every application database table: students and characteristics, activities, events and their rules, memberships and notes, all attendance, archived student snapshots, and settings. Backups include all scopes and dates regardless of the current view. Store these files securely because they contain student data.
+
+Click **Restore**, choose a downloaded backup, and confirm replacement of all current records. Download a current backup first: changes made after the selected backup will be replaced. Restore checks the file checksum, complete table list, and schema before changing records, and rolls back the entire replacement if an insertion fails. Both endpoints enforce Super Admin access and a request token. Backups and restores share the application's write lock.
+
+Restore into an initialized installation running the same schema/application version (including on another computer). The backup contains application data, not server configuration, `.env` passwords/secrets, application code, or browser preferences. Keep deployment configuration separately. Record IDs are preserved; future auto-increment IDs may remain higher on an existing database. Files are limited to 128 MiB; oversized backups fail explicitly instead of downloading a partial snapshot. Custom non-InnoDB tables or foreign keys require administrator-managed database backups/restores. The checksum detects corruption, not malicious editing; only restore files you trust.
+
+Backup regression test: `docker compose build app`, then `KEEP_TEST_APP=1 python3 tests/integration.py`, then `python3 tests/backup.py`. Tests use the disposable `er_feature_test` database at port 8081, never the main application database.

@@ -201,6 +201,20 @@ if ($role === 'head') $roleLabel = 'Head of Subject';
             </div>
 
             <div id="settingsArea" class="settings-container" style="display:none; padding: 24px;">
+                <?php if ($role === 'super_admin'): ?>
+                <section class="stat-card" style="margin-bottom:24px;" aria-labelledby="backupHeading">
+                    <h3 id="backupHeading">Backup and restore</h3>
+                    <p>Download all students, activities, events, attendance, archived registers and settings. Keep the file private: it contains student data.</p>
+                    <p>Restore replaces all current data with the selected backup. Download a fresh backup first. Maximum file size: 128 MiB.</p>
+                    <div style="display:flex; gap:8px; margin-top:16px;">
+                        <button type="button" id="backupBtn" class="btn-primary">Backup</button>
+                        <button type="button" id="restoreBtn" class="btn-secondary">Restore</button>
+                        <input type="file" id="restoreFile" accept=".json,application/json" hidden>
+                    </div>
+                    <p id="backupStatus" role="status" aria-live="polite"></p>
+                </section>
+                <script>window.__ER_BACKUP_TOKEN__ = <?php echo json_encode(\App\Auth::backupToken()); ?>;</script>
+                <?php endif; ?>
                 <div class="stat-card">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
                         <h3>Manage Students</h3>
@@ -615,5 +629,6 @@ if ($role === 'head') $roleLabel = 'Head of Subject';
 <script src="/assets/js/student-picker.js?v=1" defer></script>
 <script src="/assets/js/event-form.js?v=3" defer></script>
 <script src="/assets/js/app.js?v=8" defer></script>
+<script src="/assets/js/backup.js?v=1" defer></script>
 </body>
 </html>

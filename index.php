@@ -65,6 +65,10 @@ if ($action) {
         exit;
     }
 
+    if (in_array($action, ['backup', 'restore'], true)) {
+        (new \App\Controller\BackupController())->handle($action);
+        exit;
+    }
     $controller = new ApiController();
     $controller->handle($action);
 } else {

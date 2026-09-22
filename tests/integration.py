@@ -2,10 +2,12 @@
 """Disposable MySQL/API regression suite. Run after `docker compose build app`.
 KEEP_TEST_APP=1 retains the fixture app at localhost:8081 for browser QA.
 """
+import http.client
 import http.cookiejar
 import json
 import os
 import subprocess
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -52,6 +54,15 @@ try:
             '-p','127.0.0.1:8081:80','-e','DB_NAME='+DB,'-e','SUPER_ADMIN_PASSWORD=qa-super',
             '-e','ADMIN_PASSWORD=qa-admin','-e','HEAD_OF_SUBJECT_PASSWORD=qa-head',
             '-e','TEACHER_PASSWORD=qa-teacher','app')
+    # Startup now migrates before Apache starts; wait before seeding the fixture.
+    for attempt in range(120):
+        try:
+            urllib.request.urlopen(BASE, timeout=1).read()
+            break
+        except (urllib.error.URLError, TimeoutError, http.client.RemoteDisconnected, ConnectionResetError):
+            time.sleep(0.25)
+    else:
+        raise RuntimeError('Fixture app did not become ready')
     php(r"""
 require 'src/Database.php';
 $db = App\Database::getConnection();
