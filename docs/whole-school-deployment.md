@@ -7,13 +7,12 @@ Recurring Activities and one-time Events share the school directory and settings
 ## Local installation
 
 ```sh
-docker compose build app
 docker compose up -d --build
 ```
 
 Set `SUPER_ADMIN_PASSWORD` in `.env`, then recreate the app with `docker compose up -d app`. The password is passed through the container environment; `.env` is excluded from the application image.
 
-The migration initializes the existing base schema for a new database, then adds `activities.scope` (default `normal`), `activities.all_students_mandatory` (default `0`), and `activity_year_groups`. It is CLI-only and rerunnable. Web requests never run this migration. It preserves existing IDs and values. It also adds nullable student characteristics, nullable event_date/event_rules, event_participants and event_attendance, and archived_students snapshots. Existing whole_school rows remain in that scope and become read-only; they are never converted into dated events. Events start empty. Snapshot insertion uses INSERT IGNORE, so rerunning does not refresh or replace archived names or years.
+The migration initializes the existing base schema for a new database, then adds `activities.scope` (default `normal`), `activities.all_students_mandatory` (default `0`), and `activity_year_groups`. It is CLI-only and rerunnable, and Docker startup runs it automatically for both fresh and existing databases before starting Apache. Web requests never run this migration. It preserves existing IDs and values. It also adds nullable student characteristics, nullable event_date/event_rules, event_participants and event_attendance, and archived_students snapshots. Existing whole_school rows remain in that scope and become read-only; they are never converted into dated events. Events start empty. Snapshot insertion uses INSERT IGNORE, so rerunning does not refresh or replace archived names or years.
 
 ## Production rehearsal — required before deployment
 
@@ -82,9 +81,9 @@ Run `node tests/student-csv.cjs` for parser/mapping checks and `python3 tests/in
 
 ## Event register lifecycle
 
-The event date is a Europe/London calendar date. Each event/student has one attendance record, independent of date; rescheduling cannot duplicate marks. Eligible years automatically enrol every student, including optional attendees. Mandatory years determine the attendance obligation; inclusions are mandatory; exclusions make students optional while retaining their place. Every rule is limited to eligible years.
+The event date is a Europe/London calendar date. Each event/student has one attendance record, independent of date; rescheduling cannot duplicate marks. Eligible years automatically enrol every student, including optional attendees. Individual students can also be assigned from any year group, including when no eligible years are selected. Mandatory years determine the attendance obligation; inclusions are mandatory; exclusions make assigned students optional while retaining their place. Attendance overrides apply to students assigned by either year group or individual selection.
 
-Upcoming and same-day registers synchronize inside the transaction for student creation, import, year changes and deletion. Ineligible individual selections are removed from upcoming rules. Past registers retain saved participant names, years, mandatory status and notes, including deleted students. Descriptive edits alone do not recalculate them. Explicitly changing roster rules recalculates from the current school directory; moving a past event into the future resumes synchronization. Removed participants remain accessible through Show historical participants; their recorded attendance still contributes to reports.
+Upcoming and same-day registers synchronize inside the transaction for student creation, import, year changes and deletion. Individual assignments survive year changes; deleted students are removed from upcoming rules, and attendance overrides are removed when a student is no longer assigned. Past registers retain saved participant names, years, mandatory status and notes, including deleted students. Descriptive edits alone do not recalculate them. Explicitly changing roster rules recalculates from the current school directory; moving a past event into the future resumes synchronization. Removed participants remain accessible through Show historical participants; their recorded attendance still contributes to reports.
 
 Archive records never synchronize and every scoped write endpoint rejects them. Global student edits/deletions do not alter the archived snapshot, assignments or attendance. No historical weekly/session attendance is merged or assigned invented dates.
 

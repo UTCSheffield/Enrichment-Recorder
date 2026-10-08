@@ -39,12 +39,14 @@ with tempfile.TemporaryDirectory() as directory:
             assert before == compose('exec', '-T', 'app', 'php', 'scripts/database-fingerprint.php')
             print('PASS: fresh startup/reset creates complete schema; restart preserves data', flush=True)
             compose('down', '--volumes')
-        # Startup must not silently migrate an existing, older database.
+        # Startup upgrades an existing, older database while preserving its records.
         compose('up', '-d'); ready()
         php(connect + "$db->exec('ALTER TABLE students DROP COLUMN pp');")
         before = compose('exec', '-T', 'app', 'php', 'scripts/database-fingerprint.php')
         compose('restart', 'app'); ready()
-        assert before == compose('exec', '-T', 'app', 'php', 'scripts/database-fingerprint.php')
-        print('PASS: existing schema is not automatically migrated', flush=True)
+        after = json.loads(compose('exec', '-T', 'app', 'php', 'scripts/database-fingerprint.php'))
+        assert 'pp' in after['students']['columns']
+        assert php(connect + "echo $db->query('SELECT COUNT(*) FROM students')->fetchColumn();") == '0'
+        print('PASS: existing schema is automatically upgraded', flush=True)
     finally:
         compose('down', '--volumes')

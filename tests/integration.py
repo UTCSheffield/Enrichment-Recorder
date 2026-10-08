@@ -123,7 +123,8 @@ $db->exec("INSERT INTO attendance (student_id,activity_id,week_start,session_ind
     def edit(**fields): return superadmin.request('update_activity',post=True,scope='event',id=aid,**fields)
     def invalid(**fields): return superadmin.request('update_activity',post=True,status=400,scope='event',id=aid,**fields)
     invalid(mandatory_year_groups='11'); invalid(included_student_ids='3'); invalid(included_student_ids='1',excluded_student_ids='1')
-    invalid(event_date='2026-02-30'); invalid(year_groups=''); invalid(student_ids='1')
+    invalid(event_date='2026-02-30'); invalid(year_groups='',mandatory_year_groups='',manual_student_ids=''); invalid(student_ids='1')
+    invalid(manual_student_ids='999999')
     superadmin.request('update_activity_student',post=True,status=400,scope='event',activity_id=aid,student_id=1,mandatory=0)
     superadmin.request('toggle_attendance',post=True,status=400,scope='event',activity_id=aid,student_id=1,session_index=2,present=1)
     superadmin.request('update_activity_student',post=True,scope='event',activity_id=aid,student_id=1,note='Event note')
@@ -159,6 +160,26 @@ $db->exec("INSERT INTO attendance (student_id,activity_id,week_start,session_ind
     edit(mandatory_year_groups='',manual_student_ids='1')
     assert sorted(activity()['student_ids'])==[1,2]
     assert all(not p['mandatory'] for p in activity()['participants'] if p['active'])
+    # Manual assignments span all years and survive year changes and synchronization.
+    edit(manual_student_ids='1,3',included_student_ids='3')
+    assert sorted(activity()['student_ids'])==[1,2,3]
+    assert activity()['student_meta']['3']['mandatory']==1
+    admin.request('update_student',post=True,id=3,name='Year Eleven',year_group=12)
+    assert 3 in activity()['manual_student_ids'] and 3 in activity()['student_ids']
+    assert activity()['student_meta']['3']['mandatory']==1
+    edit(year_groups='9')
+    assert sorted(activity()['student_ids'])==[1,3]
+    edit(excluded_student_ids='3',included_student_ids='')
+    assert activity()['student_meta']['3']['mandatory']==0
+    edit(manual_student_ids='1',excluded_student_ids='')
+    assert 3 not in activity()['student_ids']
+    edit(year_groups='9,10')
+    admin.request('update_student',post=True,id=3,name='Year Eleven',year_group=11)
+    manual_only=superadmin.request('create_activity',post=True,scope='event',name='Individual invitation',event_date=future,manual_student_ids='3',included_student_ids='3')['id']
+    manual_event=next(a for a in superadmin.request('get_state',scope='event')['activities'] if a['id']==manual_only)
+    assert manual_event['year_groups']==[] and manual_event['student_ids']==[3]
+    assert manual_event['student_meta']['3']['mandatory']==1
+    print('PASS: cross-year manual assignment, persistence after year changes, attendance overrides and manual-only events')
     for scope in ['normal','whole_school','event']:
         assert superadmin.request('get_stats',scope=scope)['stats']['students']=={'1':1}
         assert superadmin.request('get_student_stats',scope=scope,id=1)['stats']['total']==1

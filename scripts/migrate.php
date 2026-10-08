@@ -8,13 +8,9 @@ $db = App\Database::getConnection(false);
 if (!$db->query("SELECT GET_LOCK('er_schema_migration', 30)")->fetchColumn()) throw new RuntimeException('Migration lock unavailable');
 try {
     $tables = $db->query('SHOW TABLES')->fetchAll(PDO::FETCH_COLUMN);
-    $automatic = in_array('--initialize-if-empty', $argv, true);
-    // Startup only creates a fresh schema. Existing installations are never upgraded here.
-    if ($automatic && $tables) {
-        echo "Existing database left unchanged.\n";
-        return;
-    }
-    $initializing = $automatic || in_array('--initialize', $argv, true);
+    // Startup upgrades existing installations and initializes entirely empty databases.
+    $startup = in_array('--startup', $argv, true);
+    $initializing = ($startup && !$tables) || in_array('--initialize', $argv, true);
     if (!in_array('students', $tables, true) && !($initializing && !$tables)) {
         throw new RuntimeException('UPGRADE STOPPED: the selected database has no students table. No schema changes were made. Reconnect the original database/volume or restore the verified backup; do not initialise replacement tables over a production installation. Use --initialize only for a genuinely new, empty installation.');
     }

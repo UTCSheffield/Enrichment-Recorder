@@ -44,15 +44,17 @@ final class Event {
         foreach (['year_groups','mandatory_year_groups','manual_student_ids','included_student_ids','excluded_student_ids'] as $field) {
             $rules[$field] = self::listIds($input[$field] ?? $old[$field] ?? [], $field, str_contains($field, 'year_groups'));
         }
-        if (!$rules['year_groups']) throw new InvalidArgumentException('Select at least one eligible year group');
+        if (!$rules['year_groups'] && !$rules['manual_student_ids']) throw new InvalidArgumentException('Select at least one eligible year group or individual student');
         if (array_diff($rules['mandatory_year_groups'], $rules['year_groups'])) throw new InvalidArgumentException('Mandatory years must be eligible');
         if (array_intersect($rules['included_student_ids'], $rules['excluded_student_ids'])) throw new InvalidArgumentException('A student cannot be both included and excluded');
         $changed = !$previous || $rules != $old;
         // Unchanged historical rules can refer to students who have since left or changed year.
         if ($changed) {
-            $eligible = $db->query('SELECT id FROM students WHERE year_group IN (' . implode(',', $rules['year_groups']) . ')')->fetchAll(PDO::FETCH_COLUMN);
-            foreach (['manual_student_ids','included_student_ids','excluded_student_ids'] as $field) {
-                if (array_diff($rules[$field], $eligible)) throw new InvalidArgumentException('Selected students must belong to eligible year groups');
+            $students = $db->query('SELECT id,year_group FROM students')->fetchAll();
+            if (array_diff($rules['manual_student_ids'], array_column($students, 'id'))) throw new InvalidArgumentException('Selected students must exist in the school directory');
+            $enrolled = array_column(array_filter($students, fn($s) => in_array((int)$s['year_group'], $rules['year_groups'], true) || in_array((int)$s['id'], $rules['manual_student_ids'], true)), 'id');
+            foreach (['included_student_ids','excluded_student_ids'] as $field) {
+                if (array_diff($rules[$field], $enrolled)) throw new InvalidArgumentException('Attendance overrides must belong to assigned students');
             }
         }
         $description = $input['description'] ?? $previous['description'] ?? '';
@@ -74,7 +76,7 @@ final class Event {
         $save = $db->prepare('INSERT INTO event_participants (event_id,student_id,name,year_group,mandatory,active) VALUES (?,?,?,?,?,1) ON DUPLICATE KEY UPDATE name=VALUES(name),year_group=VALUES(year_group),mandatory=VALUES(mandatory),active=1');
         foreach ($students as $student) {
             $sid = (int)$student['id']; $year = (int)$student['year_group'];
-            if (!in_array($year, $rules['year_groups'], true)) continue;
+            if (!in_array($year, $rules['year_groups'], true) && !in_array($sid, $rules['manual_student_ids'], true)) continue;
             $byYear = in_array($year, $rules['mandatory_year_groups'], true);
             $included = in_array($sid, $rules['included_student_ids'], true);
             $excluded = in_array($sid, $rules['excluded_student_ids'], true);
@@ -87,8 +89,10 @@ final class Event {
         $stmt->execute([self::today()]);
         foreach ($stmt->fetchAll() as $event) {
             $rules = self::rules($event);
-            $eligible = array_map('intval', $db->query('SELECT id FROM students WHERE year_group IN (' . implode(',', $rules['year_groups']) . ')')->fetchAll(PDO::FETCH_COLUMN));
-            foreach (['manual_student_ids','included_student_ids','excluded_student_ids'] as $field) $rules[$field] = array_values(array_intersect($rules[$field], $eligible));
+            $students = $db->query('SELECT id,year_group FROM students')->fetchAll();
+            $rules['manual_student_ids'] = array_values(array_intersect($rules['manual_student_ids'], array_column($students, 'id')));
+            $enrolled = array_column(array_filter($students, fn($s) => in_array((int)$s['year_group'], $rules['year_groups'], true) || in_array((int)$s['id'], $rules['manual_student_ids'], true)), 'id');
+            foreach (['included_student_ids','excluded_student_ids'] as $field) $rules[$field] = array_values(array_intersect($rules[$field], $enrolled));
             $db->prepare('UPDATE activities SET event_rules=? WHERE id=?')->execute([json_encode($rules), $event['id']]);
             self::rebuild($db, (int)$event['id'], $rules);
         }

@@ -5,4 +5,7 @@ const rules={year_groups:[9,10],mandatory_year_groups:[9],manual_student_ids:[2]
 assert.deepEqual(calculate(students,rules).map(s=>[s.id,s.mandatory]),[[1,false],[2,false],[4,true]]);
 assert.deepEqual(calculate(students,{...rules,included_student_ids:[2,3]}).map(s=>[s.id,s.mandatory]),[[1,false],[2,true],[4,true]]);
 assert.deepEqual(calculate(students,{...rules,mandatory_year_groups:[],manual_student_ids:[],excluded_student_ids:[1]}).map(s=>[s.id,s.mandatory]),[[1,false],[2,false],[4,false]]);
-console.log('PASS: automatic eligible-year roster, mandatory precedence, exclusions and eligibility');
+assert.deepEqual(calculate(students,{...rules,manual_student_ids:[2,3]}).map(s=>[s.id,s.mandatory]),[[1,false],[2,false],[3,false],[4,true]]);
+assert.deepEqual(calculate(students,{...rules,manual_student_ids:[3],included_student_ids:[3]}).map(s=>[s.id,s.mandatory]),[[1,false],[2,false],[3,true],[4,true]]);
+assert.deepEqual(calculate(students,{...rules,year_groups:[],mandatory_year_groups:[],manual_student_ids:[3],included_student_ids:[3]}).map(s=>[s.id,s.mandatory]),[[3,true]]);
+console.log('PASS: automatic year roster, individual assignments across years, manual-only roster, mandatory precedence and exclusions');

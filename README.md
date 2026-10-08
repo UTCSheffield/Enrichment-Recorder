@@ -48,7 +48,6 @@ This setup runs the application with Apache/PHP and a MySQL database.
 3. Run the following command in the project root:
 
 ```bash
-docker compose build app
 docker compose up -d --build
 ```
 
@@ -64,7 +63,7 @@ Super Admin can switch between **Activities | Events** above Statistics. Events 
 
 Upgrading an older production checkout? Follow the [production upgrade checklist](docs/production-upgrade.md). Do not start the new app before running its explicit migration.
 
-On Docker startup, the app waits for MySQL and automatically creates the complete schema only when the configured database contains no tables. Existing databases are left unchanged and still require the explicit upgrade procedure. Resetting this project’s database volume therefore needs no manual initialization command. CLI diagnostics do not trigger initialization.
+On Docker startup, the app waits for MySQL and automatically creates an empty database’s tables or applies the additive migration to an existing database before serving requests. Existing records are preserved. A migration failure prevents the website from starting; a partial database missing its original students table is still rejected. Resetting this project’s database volume therefore needs no manual initialization command. CLI diagnostics do not trigger initialization.
 
 ## Complete backups (Super Admin only)
 

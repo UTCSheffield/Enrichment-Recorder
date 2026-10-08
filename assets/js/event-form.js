@@ -2,7 +2,7 @@
 (function(root) {
     const arrays = ['year_groups','mandatory_year_groups','manual_student_ids','excluded_student_ids','included_student_ids'];
     function calculate(students, rules) {
-        return students.filter(s => rules.year_groups.includes(Number(s.year_group))).flatMap(s => {
+        return students.filter(s => rules.year_groups.includes(Number(s.year_group)) || rules.manual_student_ids.includes(Number(s.id))).flatMap(s => {
             const id = Number(s.id);
             const byYear = rules.mandatory_year_groups.includes(Number(s.year_group));
             const included = rules.included_student_ids.includes(id), excluded = rules.excluded_student_ids.includes(id);
@@ -36,7 +36,7 @@
             dropdown.append(search,results);section.append(heading,tags,dropdown);container.append(section);
             sections[field]={tags,search,results,add,dropdown};
             sections[field].popover=root.StudentPicker.attach(dropdown,add,()=>renderPicker(field));
-            if(field==='manual_student_ids')section.append(element('p','Students in the selected year groups are added automatically.','form-help'));
+            if(field==='manual_student_ids')section.append(element('p','Students in the selected year groups are added automatically. You can also add individual students from any year group.','form-help'));
             search.addEventListener('input',()=>renderPicker(field));
             search.addEventListener('keydown',e=>{if(e.key==='Escape'){e.stopPropagation();closePickers();add.focus();}});
         }
@@ -46,19 +46,18 @@
             const label=element('label');const checkbox=element('input');checkbox.type='checkbox';checkbox.value=year;checkbox.checked=checked;
             checkbox.addEventListener('change',()=>change(checkbox.checked));label.append(checkbox,document.createTextNode(`Year ${year}`));return label;
         }
-        function eligibleStudents() {return students.filter(s=>rules.year_groups.includes(Number(s.year_group)));}
         function prune() {
             let removed=0;
             const years=rules.mandatory_year_groups.filter(y=>rules.year_groups.includes(y));removed+=rules.mandatory_year_groups.length-years.length;rules.mandatory_year_groups=years;
-            const ids=new Set(eligibleStudents().map(s=>Number(s.id)));
-            for(const field of arrays.slice(2)){const kept=rules[field].filter(id=>ids.has(id));removed+=rules[field].length-kept.length;rules[field]=kept;}
-            notice.textContent=removed ? `${removed} incompatible selection${removed===1?' was':'s were'} removed because the eligible years changed.` : '';
+            const ids=new Set(calculate(students,rules).map(s=>Number(s.id)));
+            for(const field of ['included_student_ids','excluded_student_ids']){const kept=rules[field].filter(id=>ids.has(id));removed+=rules[field].length-kept.length;rules[field]=kept;}
+            notice.textContent=removed ? `${removed} incompatible selection${removed===1?' was':'s were'} removed because the event roster changed.` : '';
         }
         function renderPicker(field) {
             const {search,results}=sections[field];results.replaceChildren();
-            const mandatory=new Set(calculate(students,rules).filter(s=>s.mandatory).map(s=>Number(s.id)));
-            const enrolled=new Set(calculate(students,rules).map(s=>Number(s.id)));
-            const candidates=eligibleStudents().filter(s=>!rules[field].includes(Number(s.id)) && s.name.toLowerCase().includes(search.value.toLowerCase()) &&
+            const roster=calculate(students,rules);
+            const mandatory=new Set(roster.filter(s=>s.mandatory).map(s=>Number(s.id)));
+            const candidates=(field==='manual_student_ids' ? students : roster).filter(s=>!rules[field].includes(Number(s.id)) && s.name.toLowerCase().includes(search.value.toLowerCase()) &&
                 (field==='excluded_student_ids' ? mandatory.has(Number(s.id)) : field==='included_student_ids' ? !mandatory.has(Number(s.id)) : true));
             candidates.forEach(s=>{
                 const button=element('button',s.name,'picker-item');button.type='button';
@@ -91,7 +90,7 @@
                     const chip=element('div',null,'tag-chip');chip.append(element('span',student?.name || `Student #${id}`));
                     if(field!=='manual_student_ids' || rules.manual_student_ids.includes(id)) {
                         const remove=element('button','×','tag-remove');remove.type='button';remove.setAttribute('aria-label',`Remove ${student?.name || id}`);
-                        remove.addEventListener('click',()=>{rules[field]=rules[field].filter(x=>x!==id);render();});chip.append(remove);
+                        remove.addEventListener('click',()=>{rules[field]=rules[field].filter(x=>x!==id);prune();render();});chip.append(remove);
                     } else chip.title='Assigned by year group';
                     tags.append(chip);
                 });

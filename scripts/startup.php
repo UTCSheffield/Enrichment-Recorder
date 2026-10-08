@@ -1,5 +1,5 @@
 <?php
-// Wait for MySQL before accepting web requests, then initialise only an empty database.
+// Wait for MySQL before accepting web requests, then apply the additive schema before serving the app.
 require __DIR__ . '/../src/Env.php';
 App\Env::load(__DIR__ . '/../.env', false);
 $deadline = time() + 120;
@@ -17,5 +17,5 @@ do {
         sleep(2);
     }
 } while (true);
-$argv = [__DIR__ . '/migrate.php', '--initialize-if-empty'];
+$argv = [__DIR__ . '/migrate.php', '--startup'];
 require __DIR__ . '/migrate.php';
