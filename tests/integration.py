@@ -222,10 +222,23 @@ catch (RuntimeException $e) { echo 'Collision rejected'; }
     assert 'Super Admin' not in admin.opener.open(BASE).read().decode().split('id="roleBadge"')[1].split('</span>')[0]
     admin.request('check_super_admin_password',status=400)
     admin.request('check_super_admin_password',post=True,status=403,token='invalid',password='qa-super')
+    reveal_body=urllib.parse.urlencode({'token':token}).encode()
+    reveal_response=admin.opener.open(BASE+'?action=reveal_super_admin_password',reveal_body)
+    assert reveal_response.headers['Cache-Control']=='no-store'
+    assert json.loads(reveal_response.read())['password']=='qa-super'
+    admin.request('get_state',scope='event',status=403)
+    admin.request('reveal_super_admin_password',status=400)
+    admin.request('reveal_super_admin_password',post=True,status=403,token='invalid')
+    super_page=superadmin.opener.open(BASE).read().decode()
+    super_token=re.search(r'id="authCheckForm" data-token="([a-f0-9]+)"',super_page).group(1)
+    assert superadmin.request('reveal_super_admin_password',post=True,token=super_token)['password']=='qa-super'
+    superadmin.request('reveal_super_admin_password',post=True,status=403,token=token)
     for client in [head,teacher]:
         client.request('check_super_admin_password',post=True,status=403,token=token,password='qa-super')
+        client.request('reveal_super_admin_password',post=True,status=403,token=token)
         assert 'id="authCheckForm"' not in client.opener.open(BASE).read().decode()
     Client().request('check_super_admin_password',post=True,status=401,password='qa-super')
+    Client().request('reveal_super_admin_password',post=True,status=401,token=token)
     checks=php(r"""
 require 'src/Auth.php';
 putenv('ADMIN_PASSWORD=PlainAdmin'); putenv('HEAD_OF_SUBJECT_PASSWORD=PlainHead'); putenv('TEACHER_PASSWORD=PlainTeacher');
@@ -240,6 +253,7 @@ echo 'PASS: configuration diagnoses';
 """)
     assert 'PASS' in checks
     print('PASS: admin-only password diagnostics, request tokens, secret-free responses, no privilege change and configuration states')
+    print('PASS: explicit Admin/Super Admin password reveal, no initial HTML disclosure, POST/token/role gates and non-cacheable response')
     # Normal role capabilities and Super Admin inheritance.
     nid=head.request('create_activity',post=True,name='Head activity',sessions_per_week=1,student_ids='1')['id']
     teacher.request('update_activity',post=True,id=nid,student_ids='1,2')

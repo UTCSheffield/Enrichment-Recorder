@@ -35,6 +35,8 @@ These shared passwords are configured in `.env`.
 
 If only Super Admin sign-in fails, sign in as a normal Admin and open **Settings → Super Admin sign-in check**. It reports whether the running web app received a missing, empty, default, conflicting, or configured Super Admin password. **Check password** compares the expected password against this server without changing passwords, signing in as Super Admin, or displaying stored passwords. The App code ID helps identify different application versions serving requests. A password present in the host’s `.env` still needs to be forwarded by the deployment’s Compose configuration; an older/custom configuration can pass the three original role passwords while omitting `SUPER_ADMIN_PASSWORD`.
 
+Admin and Super Admin can click **Show configured password** to reveal the exact Super Admin password loaded by the web process. It is fetched only on click through an authenticated POST with a request token and a non-cacheable response; it is absent from the initial page. **Hide configured password**, leaving Settings, or hiding the browser tab clears the displayed value. Head of Subject and Teacher cannot use this action. Normal Admin therefore has access to the Super Admin credential through this diagnostic control.
+
 ## Run with Docker
 This setup runs the application with Apache/PHP and a MySQL database.
 

@@ -4,6 +4,58 @@
     const password = document.querySelector('#authCheckPassword');
     const result = document.querySelector('#authCheckResult');
     const button = form.querySelector('button');
+    const revealButton = document.querySelector('#authRevealBtn');
+    const loadedArea = document.querySelector('#authLoadedPasswordArea');
+    const loadedPassword = document.querySelector('#authLoadedPassword');
+    const revealStatus = document.querySelector('#authRevealStatus');
+    const settings = document.querySelector('#settingsArea');
+    let revealRequest = null;
+    function hideLoadedPassword() {
+        revealRequest?.abort();
+        revealRequest = null;
+        loadedPassword.textContent = '';
+        loadedArea.hidden = true;
+        revealButton.textContent = 'Show configured password';
+        revealButton.setAttribute('aria-expanded', 'false');
+        revealButton.disabled = false;
+        revealStatus.textContent = '';
+    }
+    revealButton.addEventListener('click', async () => {
+        if (!loadedArea.hidden) { hideLoadedPassword(); return; }
+        const request = new AbortController();
+        revealRequest = request;
+        revealButton.disabled = true;
+        revealStatus.textContent = 'Reading this server’s configured password…';
+        try {
+            const response = await fetch('/?action=reveal_super_admin_password', {
+                method: 'POST', cache: 'no-store', signal: request.signal,
+                body: new URLSearchParams({token: form.dataset.token})
+            });
+            if (response.status === 401) throw new Error('Your session expired. Sign in again to show the password.');
+            const data = await response.json();
+            if (!response.ok || data.error) throw new Error(data.error || 'The configured password could not be read.');
+            if (request.signal.aborted || settings.style.display === 'none' || document.hidden) return;
+            document.querySelector('#authConfigStatus').textContent = data.status.message;
+            if (data.password === null || data.password === '') {
+                revealStatus.textContent = data.status.message;
+            } else {
+                loadedPassword.textContent = data.password;
+                loadedArea.hidden = false;
+                revealButton.textContent = 'Hide configured password';
+                revealButton.setAttribute('aria-expanded', 'true');
+                revealStatus.textContent = '';
+            }
+        } catch (error) {
+            if (!request.signal.aborted) revealStatus.textContent = error.message || 'The configured password could not be read.';
+        } finally {
+            if (revealRequest === request) { revealRequest = null; revealButton.disabled = false; }
+        }
+    });
+    new MutationObserver(() => {
+        if (settings.style.display === 'none') hideLoadedPassword();
+    }).observe(settings, {attributes: true, attributeFilter: ['style']});
+    document.addEventListener('visibilitychange', () => { if (document.hidden) hideLoadedPassword(); });
+    window.addEventListener('pagehide', hideLoadedPassword);
     form.addEventListener('submit', async event => {
         event.preventDefault();
         const body = new URLSearchParams({password: password.value, token: form.dataset.token});

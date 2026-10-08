@@ -206,6 +206,9 @@ if ($role === 'head') $roleLabel = 'Head of Subject';
                     <h3 id="authCheckHeading">Super Admin sign-in check</h3>
                     <p id="authConfigStatus"><?php echo htmlspecialchars($authStatus['message'], ENT_QUOTES, 'UTF-8'); ?></p>
                     <p class="form-help">App code ID: <code id="authCodeId"><?php echo htmlspecialchars($authStatus['code_id'], ENT_QUOTES, 'UTF-8'); ?></code>. Different IDs on repeated page loads indicate different app versions are serving requests.</p>
+                    <button type="button" id="authRevealBtn" class="btn-secondary" aria-expanded="false" aria-controls="authLoadedPasswordArea" style="margin-top:12px;">Show configured password</button>
+                    <p id="authRevealStatus" role="status" aria-live="polite"></p>
+                    <p id="authLoadedPasswordArea" hidden style="margin-top:12px;">Loaded Super Admin password: <code id="authLoadedPassword" style="white-space:pre-wrap; overflow-wrap:anywhere;"></code></p>
                     <form id="authCheckForm" data-token="<?php echo htmlspecialchars(\App\Auth::diagnosticToken(), ENT_QUOTES, 'UTF-8'); ?>" style="margin-top:16px;">
                         <div class="form-group">
                             <label for="authCheckPassword">Expected Super Admin password</label>
@@ -645,6 +648,6 @@ if ($role === 'head') $roleLabel = 'Head of Subject';
 <script src="/assets/js/event-form.js?v=3" defer></script>
 <script src="/assets/js/app.js?v=8" defer></script>
 <script src="/assets/js/backup.js?v=1" defer></script>
-<script src="/assets/js/auth-check.js?v=1" defer></script>
+<script src="/assets/js/auth-check.js?v=2" defer></script>
 </body>
 </html>
