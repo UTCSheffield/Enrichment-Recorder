@@ -209,6 +209,37 @@ try { App\Auth::login('qa-admin'); throw new Exception('Collision accepted'); }
 catch (RuntimeException $e) { echo 'Collision rejected'; }
 """)
     assert 'Collision rejected' in auth_checks
+    # Admins can diagnose the real web environment without revealing passwords or signing in as Super Admin.
+    import re
+    admin_page=admin.opener.open(BASE).read().decode()
+    assert 'Super Admin sign-in check' in admin_page and 'qa-super' not in admin_page
+    token=re.search(r'id="authCheckForm" data-token="([a-f0-9]+)"',admin_page).group(1)
+    diagnostic=admin.request('check_super_admin_password',post=True,token=token,password='qa-super')
+    assert diagnostic['matches'] and diagnostic['status']['state']=='configured'
+    assert set(diagnostic['status'])=={'state','message','code_id'}
+    assert 'qa-super' not in json.dumps(diagnostic)
+    assert not admin.request('check_super_admin_password',post=True,token=token,password='WrongPassword')['matches']
+    assert 'Super Admin' not in admin.opener.open(BASE).read().decode().split('id="roleBadge"')[1].split('</span>')[0]
+    admin.request('check_super_admin_password',status=400)
+    admin.request('check_super_admin_password',post=True,status=403,token='invalid',password='qa-super')
+    for client in [head,teacher]:
+        client.request('check_super_admin_password',post=True,status=403,token=token,password='qa-super')
+        assert 'id="authCheckForm"' not in client.opener.open(BASE).read().decode()
+    Client().request('check_super_admin_password',post=True,status=401,password='qa-super')
+    checks=php(r"""
+require 'src/Auth.php';
+putenv('ADMIN_PASSWORD=PlainAdmin'); putenv('HEAD_OF_SUBJECT_PASSWORD=PlainHead'); putenv('TEACHER_PASSWORD=PlainTeacher');
+$cases = [[null,'missing'],['','empty'],['super-admin','default'],['PlainAdmin','collision'],['PlainSuper','configured']];
+foreach ($cases as [$password,$state]) {
+    putenv($password === null ? 'SUPER_ADMIN_PASSWORD' : 'SUPER_ADMIN_PASSWORD='.$password);
+    if (App\Auth::superAdminStatus()['state'] !== $state) throw new RuntimeException('Incorrect configuration diagnosis');
+    $expected = in_array($state,['default','configured'],true);
+    if (App\Auth::checkSuperAdminPassword($password ?? '') !== $expected) throw new RuntimeException('Incorrect password diagnosis');
+}
+echo 'PASS: configuration diagnoses';
+""")
+    assert 'PASS' in checks
+    print('PASS: admin-only password diagnostics, request tokens, secret-free responses, no privilege change and configuration states')
     # Normal role capabilities and Super Admin inheritance.
     nid=head.request('create_activity',post=True,name='Head activity',sessions_per_week=1,student_ids='1')['id']
     teacher.request('update_activity',post=True,id=nid,student_ids='1,2')

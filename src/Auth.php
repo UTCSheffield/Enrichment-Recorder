@@ -94,6 +94,38 @@ class Auth {
         return hash_hmac('sha256', 'backup:' . ($_COOKIE[self::COOKIE_NAME] ?? ''), getenv('AUTH_SECRET') ?: '');
     }
 
+    public static function diagnosticToken(): string {
+        return hash_hmac('sha256', 'auth-check:' . ($_COOKIE[self::COOKIE_NAME] ?? ''), getenv('AUTH_SECRET') ?: '');
+    }
+
+    // Report the web process's actual configuration, without exposing any secret or password hash.
+    public static function superAdminStatus(): array {
+        $raw = getenv('SUPER_ADMIN_PASSWORD');
+        $super = trim($raw ?: '');
+        $state = 'configured';
+        $message = 'This app has received a Super Admin password. You can check whether it matches the password you expect.';
+        if ($raw === false) {
+            $state = 'missing';
+            $message = 'This app did not receive SUPER_ADMIN_PASSWORD. A password in the server’s .env file must also be passed into the app container by its deployment configuration.';
+        } elseif ($super === '') {
+            $state = 'empty';
+            $message = 'This app received an empty Super Admin password, so Super Admin sign-in is disabled.';
+        } elseif (in_array($super, array_map(fn($key) => trim(getenv($key) ?: ''), ['ADMIN_PASSWORD', 'HEAD_OF_SUBJECT_PASSWORD', 'TEACHER_PASSWORD']), true)) {
+            $state = 'collision';
+            $message = 'The Super Admin password matches another role password. The login code rejects this configuration.';
+        } elseif ($super === 'super-admin') {
+            $state = 'default';
+            $message = 'This app is using the default Super Admin password. The intended password may not have reached this container.';
+        }
+        return ['state' => $state, 'message' => $message, 'code_id' => substr(hash_file('sha256', __FILE__), 0, 12)];
+    }
+
+    public static function checkSuperAdminPassword(string $password): bool {
+        $super = trim(getenv('SUPER_ADMIN_PASSWORD') ?: '');
+        return in_array(self::superAdminStatus()['state'], ['configured', 'default'], true)
+            && $super !== '' && hash_equals($super, trim($password));
+    }
+
     public static function logout(): void {
         self::clearCookie();
     }

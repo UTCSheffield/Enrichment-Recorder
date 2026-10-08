@@ -357,6 +357,16 @@ class ApiController {
                     Auth::requireRole(['admin']);
                     echo json_encode(['settings' => Settings::getAll($this->db)]);
                     break;
+                case 'check_super_admin_password':
+                    Auth::requireRole(['admin']);
+                    if ($_SERVER['REQUEST_METHOD'] !== 'POST') throw new Exception('Use POST for a password check');
+                    if (!hash_equals(Auth::diagnosticToken(), (string)($_POST['token'] ?? ''))) {
+                        http_response_code(403);
+                        echo json_encode(['error' => 'Invalid request token']);
+                        break;
+                    }
+                    echo json_encode(['status' => Auth::superAdminStatus(), 'matches' => Auth::checkSuperAdminPassword((string)($_POST['password'] ?? ''))]);
+                    break;
                 default:
                     throw new Exception('Unknown action');
             }

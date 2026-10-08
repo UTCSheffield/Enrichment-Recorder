@@ -201,6 +201,21 @@ if ($role === 'head') $roleLabel = 'Head of Subject';
             </div>
 
             <div id="settingsArea" class="settings-container" style="display:none; padding: 24px;">
+                <?php if (\App\Auth::isAdmin()): $authStatus = \App\Auth::superAdminStatus(); ?>
+                <section class="stat-card" style="margin-bottom:24px;" aria-labelledby="authCheckHeading">
+                    <h3 id="authCheckHeading">Super Admin sign-in check</h3>
+                    <p id="authConfigStatus"><?php echo htmlspecialchars($authStatus['message'], ENT_QUOTES, 'UTF-8'); ?></p>
+                    <p class="form-help">App code ID: <code id="authCodeId"><?php echo htmlspecialchars($authStatus['code_id'], ENT_QUOTES, 'UTF-8'); ?></code>. Different IDs on repeated page loads indicate different app versions are serving requests.</p>
+                    <form id="authCheckForm" data-token="<?php echo htmlspecialchars(\App\Auth::diagnosticToken(), ENT_QUOTES, 'UTF-8'); ?>" style="margin-top:16px;">
+                        <div class="form-group">
+                            <label for="authCheckPassword">Expected Super Admin password</label>
+                            <input id="authCheckPassword" type="password" autocomplete="off" required>
+                        </div>
+                        <button type="submit" class="btn-secondary">Check password</button>
+                        <p id="authCheckResult" role="status" aria-live="polite" style="margin-top:12px;"></p>
+                    </form>
+                </section>
+                <?php endif; ?>
                 <?php if ($role === 'super_admin'): ?>
                 <section class="stat-card" style="margin-bottom:24px;" aria-labelledby="backupHeading">
                     <h3 id="backupHeading">Backup and restore</h3>
@@ -630,5 +645,6 @@ if ($role === 'head') $roleLabel = 'Head of Subject';
 <script src="/assets/js/event-form.js?v=3" defer></script>
 <script src="/assets/js/app.js?v=8" defer></script>
 <script src="/assets/js/backup.js?v=1" defer></script>
+<script src="/assets/js/auth-check.js?v=1" defer></script>
 </body>
 </html>
